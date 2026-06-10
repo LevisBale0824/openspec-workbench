@@ -22,6 +22,7 @@ pub fn run() {
             commands::files::scan_artifacts,
             commands::files::read_file_content,
             commands::files::write_file_content,
+            commands::files::list_directory,
             commands::config::load_config,
             commands::config::save_config,
         ])

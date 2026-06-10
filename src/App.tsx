@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ProjectSelect } from "./pages/ProjectSelect";
-import { WorkbenchPage } from "./pages/WorkbenchPage";
+import { WorkbenchLayout } from "./components/layout/WorkbenchLayout";
+import { SettingsModal } from "./components/settings/SettingsModal";
 import { OpenCodeAdapter } from "./agents/opencode";
 import { ZeroAdapter } from "./agents/zero";
 import { useAgentStore } from "./stores/agent";
@@ -10,7 +11,6 @@ export default function App() {
   const { initialize } = useAgentStore();
 
   const handleProjectSelected = () => {
-    // Initialize agents with default config
     initialize(
       [new OpenCodeAdapter(), new ZeroAdapter()],
       "opencode",
@@ -22,5 +22,10 @@ export default function App() {
     return <ProjectSelect onProjectSelected={handleProjectSelected} />;
   }
 
-  return <WorkbenchPage />;
+  return (
+    <>
+      <WorkbenchLayout />
+      <SettingsModal />
+    </>
+  );
 }

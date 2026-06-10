@@ -5,18 +5,13 @@ describe("OpenCodeAdapter", () => {
   it("has correct name and type", () => {
     const adapter = new OpenCodeAdapter();
     expect(adapter.name).toBe("opencode");
-    expect(adapter.type).toBe("sdk");
+    expect(adapter.type).toBe("cli");
   });
 
-  it("reports unavailable when server not running", async () => {
-    const adapter = new OpenCodeAdapter({ serverUrl: "http://localhost:99999" });
+  it("reports unavailable when CLI not found", async () => {
+    const adapter = new OpenCodeAdapter();
+    // In test environment without Tauri runtime, this should return false
     const available = await adapter.isAvailable();
     expect(available).toBe(false);
-  });
-
-  it("returns error response when server unavailable", async () => {
-    const adapter = new OpenCodeAdapter({ serverUrl: "http://localhost:99999" });
-    const result = await adapter.execute({ prompt: "test", projectPath: "/tmp" });
-    expect(result.success).toBe(false);
   });
 });

@@ -10,6 +10,60 @@ pub struct ArtifactInfo {
     pub is_dir: bool,
 }
 
+/// Skip these directories when listing
+const SKIP_DIRS: &[&str] = &[
+    "node_modules",
+    ".git",
+    "target",
+    "dist",
+    ".next",
+    ".nuxt",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".idea",
+    ".vscode",
+];
+
+#[derive(Debug, Serialize, Clone)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+}
+
+#[command]
+pub fn list_directory(dir_path: String) -> Result<Vec<FileEntry>, String> {
+    let path = PathBuf::from(&dir_path);
+    if !path.exists() || !path.is_dir() {
+        return Ok(vec![]);
+    }
+    let mut entries = Vec::new();
+    let read_dir = fs::read_dir(&path).map_err(|e| e.to_string())?;
+    for entry in read_dir {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if file_name.starts_with('.') {
+            continue;
+        }
+        let metadata = entry.metadata().map_err(|e| e.to_string())?;
+        let is_dir = metadata.is_dir();
+        if is_dir && SKIP_DIRS.contains(&file_name.as_str()) {
+            continue;
+        }
+        entries.push(FileEntry {
+            name: file_name,
+            path: entry.path().to_string_lossy().to_string(),
+            is_dir,
+        });
+    }
+    // Directories first, then files; each group sorted alphabetically
+    entries.sort_by(|a, b| {
+        b.is_dir.cmp(&a.is_dir).then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    Ok(entries)
+}
+
 #[command]
 pub fn scan_artifacts(dir_path: String) -> Result<Vec<ArtifactInfo>, String> {
     let path = PathBuf::from(&dir_path);

@@ -1,10 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useWorkflowStore, StepName } from "../../stores/workflow";
 import { useAgentStore } from "../../stores/agent";
-import { ArtifactTabs } from "../layout/ArtifactTabs";
-import { DocViewer } from "../layout/DocViewer";
-import { ChatPanel } from "../layout/ChatPanel";
-import { ActionBar } from "../layout/ActionBar";
 import { InputModal } from "./InputModal";
 import { StreamOutput } from "./StreamOutput";
 
@@ -16,16 +12,20 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
   const {
     currentPhase,
     streamOutput,
-    artifacts,
     setPhase,
     advanceStep,
-    markReviewed,
     appendStreamOutput,
     clearStreamOutput,
   } = useWorkflowStore();
-  const { activeAgent, isAvailable } = useAgentStore();
+  const { activeAgent } = useAgentStore();
   const [showInput, setShowInput] = useState(false);
-  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [streamOutput]);
 
   const handleStart = () => {
     setShowInput(true);
@@ -43,7 +43,7 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
 
     const available = await activeAgent.isAvailable();
     if (!available) {
-      alert(`Agent "${activeAgent.name}" 不可用，请确认服务已启动。\n\nOpenCode: 需要在 localhost:3000 运行\nZero: 需要在 localhost:8080 运行`);
+      alert(`Agent "${activeAgent.name}" 不可用，请确认 CLI 工具已安装并在 PATH 中。\n\nOpenCode: npm install -g opencode\nZero: 请参考官方文档安装`);
       return;
     }
 
@@ -66,16 +66,7 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
     setPhase("reviewing");
   };
 
-  const handleRetry = () => {
-    setShowInput(true);
-  };
-
-  const handleNext = async () => {
-    setPhase("done");
-    await advanceStep();
-  };
-
-  // Input modal (must check before idle — local state overrides phase)
+  // Input modal — renders as fixed overlay
   if (showInput) {
     return (
       <InputModal
@@ -86,18 +77,18 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
     );
   }
 
-  // Idle state
+  // Idle state — compact for side panel
   if (currentPhase === "idle") {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-5xl mb-3 opacity-60">
+      <div className="p-4">
+        <div className="text-center py-8">
+          <div className="text-4xl mb-3 opacity-60">
             {stepName === "explore" && "🔍"}
             {stepName === "propose" && "📋"}
             {stepName === "apply" && "⚡"}
             {stepName === "archive" && "📦"}
           </div>
-          <p className="text-slate-500 text-sm mb-5">
+          <p className="text-slate-500 text-xs mb-5">
             {stepName === "explore" && "探索阶段：分析需求，理解项目上下文"}
             {stepName === "propose" && "提案阶段：生成正式提案和设计文档"}
             {stepName === "apply" && "实施阶段：逐任务执行，TDD 开发"}
@@ -105,7 +96,7 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
           </p>
           <button
             onClick={handleStart}
-            className="px-8 py-3 bg-gradient-to-r from-sky-400 to-indigo-400 text-slate-900 rounded-xl font-bold text-sm hover:scale-105 transition-transform"
+            className="px-6 py-2.5 bg-gradient-to-r from-sky-400 to-indigo-400 text-slate-900 rounded-xl font-bold text-xs hover:scale-105 transition-transform"
           >
             🚀 开始 {stepName.charAt(0).toUpperCase() + stepName.slice(1)}
           </button>
@@ -114,43 +105,46 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
     );
   }
 
-  // Executing state
+  // Executing state — terminal output
   if (currentPhase === "executing") {
     return (
-      <div className="flex-1 p-5">
+      <div className="p-3 flex flex-col h-full">
         <StreamOutput />
-        <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-slate-300 leading-relaxed min-h-[300px] border border-slate-700">
+        <div
+          ref={terminalRef}
+          className="flex-1 bg-slate-900 rounded-lg p-3 font-mono text-[11px] text-slate-300 leading-relaxed overflow-y-auto border border-slate-700 min-h-0"
+        >
           {streamOutput}
-          <span className="inline-block w-2 h-3.5 bg-sky-400 animate-pulse ml-0.5 align-middle" />
+          <span className="inline-block w-1.5 h-3 bg-sky-400 animate-pulse ml-0.5 align-middle" />
         </div>
       </div>
     );
   }
 
-  // Reviewing state
+  // Reviewing state — show stream result + actions
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: Document review */}
-        <div className="flex-[3] flex flex-col border-r border-slate-700">
-          <ArtifactTabs
-            activeArtifact={activeArtifactId}
-            onSelect={setActiveArtifactId}
-          />
-          <DocViewer filePath={activeArtifactId} />
-        </div>
-
-        {/* Right: Chat panel */}
-        <div className="flex-[2]">
-          <ChatPanel />
-        </div>
+    <div className="p-3 flex flex-col h-full">
+      <div className="text-xs text-emerald-400 mb-2 font-medium">✓ 执行完成</div>
+      <div
+        ref={terminalRef}
+        className="flex-1 bg-slate-900 rounded-lg p-3 font-mono text-[11px] text-slate-300 leading-relaxed overflow-y-auto border border-slate-700 min-h-0"
+      >
+        {streamOutput}
       </div>
-
-      <ActionBar
-        onMarkReviewed={() => activeArtifactId && markReviewed(activeArtifactId)}
-        onRetry={handleRetry}
-        onNext={handleNext}
-      />
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={() => setShowInput(true)}
+          className="flex-1 py-2 rounded-lg border border-slate-600 text-slate-400 text-xs hover:border-slate-400"
+        >
+          🔄 重试
+        </button>
+        <button
+          onClick={async () => { setPhase("done"); await advanceStep(); }}
+          className="flex-1 py-2 rounded-lg bg-gradient-to-r from-sky-400 to-indigo-400 text-slate-900 text-xs font-bold"
+        >
+          下一步 →
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { Command } from "@tauri-apps/plugin-shell";
 import {
   AgentAdapter,
   AgentRequest,
@@ -6,111 +7,102 @@ import {
   AgentConfig,
 } from "./types";
 
-export type ZeroMode = "cli" | "server";
-
+/**
+ * CLI adapter for Zero (AI coding agent).
+ * Placeholder — reports unavailable until the CLI is found.
+ * On Windows, wraps with `cmd /C` to resolve .cmd scripts.
+ */
 export class ZeroAdapter implements AgentAdapter {
   name = "zero";
-  type: "sdk" | "cli" | "http";
-  private mode: ZeroMode;
-  private cliPath: string;
-  private serverUrl: string;
-
-  constructor(options?: {
-    mode?: ZeroMode;
-    cliPath?: string;
-    serverUrl?: string;
-  }) {
-    this.mode = options?.mode || "cli";
-    this.cliPath = options?.cliPath || "zero";
-    this.serverUrl = options?.serverUrl || "http://localhost:8080";
-    this.type = this.mode === "server" ? "http" : "cli";
-  }
+  type: "cli" = "cli";
 
   async start(): Promise<void> {}
+
   async stop(): Promise<void> {}
 
   async isAvailable(): Promise<boolean> {
-    if (this.mode === "server") {
-      try {
-        const res = await fetch(`${this.serverUrl}/health`);
-        return res.ok;
-      } catch {
-        return false;
-      }
+    try {
+      const { program, args } = this.wrapCommand(["--version"]);
+      const output = await Command.create(program, args).execute();
+      return output.code === 0;
+    } catch {
+      return false;
     }
-    // CLI mode: we can't easily check without @tauri-apps/plugin-shell
-    // which isn't available in vitest. Just return false in test environment.
-    return false;
   }
 
   async execute(req: AgentRequest): Promise<AgentResponse> {
-    if (this.mode === "server") {
-      return this.executeViaHttp(req);
-    }
-    return { content: "CLI mode requires Tauri runtime", success: false };
-  }
-
-  private async executeViaHttp(req: AgentRequest): Promise<AgentResponse> {
     try {
-      const res = await fetch(`${this.serverUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: req.prompt,
-          projectPath: req.projectPath,
-        }),
-      });
-      const data = await res.json();
-      return { content: data.content || "", success: res.ok };
+      const { program, args } = this.wrapCommand(["run", req.prompt]);
+      const output = await Command.create(program, args).execute();
+      if (output.code !== 0) {
+        return { content: output.stderr || `Exit code: ${output.code}`, success: false };
+      }
+      return { content: output.stdout, success: true };
     } catch (err) {
       return { content: String(err), success: false };
     }
   }
 
   async *executeStream(req: AgentRequest): AsyncIterable<string> {
-    if (this.mode === "server") {
-      try {
-        const res = await fetch(`${this.serverUrl}/api/chat/stream`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: req.prompt,
-            projectPath: req.projectPath,
-          }),
-        });
-        const reader = res.body?.getReader();
-        if (!reader) return;
-        const decoder = new TextDecoder();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          yield decoder.decode(value, { stream: true });
-        }
-      } catch (err) {
-        yield `Error: ${err}`;
+    const { program, args } = this.wrapCommand(["run", req.prompt]);
+    const command = Command.create(program, args);
+
+    const queue: { text: string; done: boolean }[] = [];
+    let resolveNext: ((value: void) => void) | null = null;
+
+    const notify = () => {
+      if (resolveNext) { resolveNext(); resolveNext = null; }
+    };
+
+    const waitForItem = (): Promise<void> => {
+      if (queue.length > 0) return Promise.resolve();
+      return new Promise<void>((r) => { resolveNext = r; });
+    };
+
+    command.stdout.on("data", (line: string) => {
+      const trimmed = line.trim();
+      if (trimmed) { queue.push({ text: trimmed, done: false }); notify(); }
+    });
+
+    command.stderr.on("data", (line: string) => {
+      const trimmed = line.trim();
+      if (trimmed) { queue.push({ text: `[stderr] ${trimmed}`, done: false }); notify(); }
+    });
+
+    command.on("close", () => { queue.push({ text: "", done: true }); notify(); });
+    command.on("error", (err: string) => {
+      queue.push({ text: `Error: ${err}`, done: false });
+      queue.push({ text: "", done: true });
+      notify();
+    });
+
+    try {
+      await command.spawn();
+    } catch (err) {
+      yield `Error: ${err}`;
+      return;
+    }
+
+    while (true) {
+      await waitForItem();
+      while (queue.length > 0) {
+        const item = queue.shift()!;
+        if (item.done) return;
+        if (item.text) yield item.text;
       }
-    } else {
-      yield "CLI mode requires Tauri runtime";
     }
   }
 
   async *chat(messages: ChatMessage[]): AsyncIterable<string> {
     const lastMessage = messages[messages.length - 1];
-    yield* this.executeStream({
-      prompt: lastMessage.content,
-      projectPath: "",
-    });
+    yield* this.executeStream({ prompt: lastMessage.content, projectPath: "" });
   }
 
   async getConfig(): Promise<AgentConfig> {
-    if (this.mode === "server") {
-      try {
-        const res = await fetch(`${this.serverUrl}/api/config`);
-        return await res.json();
-      } catch {
-        return {};
-      }
-    }
     return {};
+  }
+
+  private wrapCommand(zeroArgs: string[]): { program: string; args: string[] } {
+    return { program: "zero", args: zeroArgs };
   }
 }
