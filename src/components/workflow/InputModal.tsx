@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAgentStore } from "../../stores/agent";
 
 interface InputModalProps {
@@ -9,8 +9,21 @@ interface InputModalProps {
 
 export function InputModal({ stepName, onSubmit, onCancel }: InputModalProps) {
   const [prompt, setPrompt] = useState("");
+  const [agentStatus, setAgentStatus] = useState<Record<string, boolean>>({});
   const { registry, activeAgent, setActive } = useAgentStore();
   const agents = registry.list();
+
+  useEffect(() => {
+    // Check availability of all agents on mount
+    const check = async () => {
+      const results: Record<string, boolean> = {};
+      for (const agent of agents) {
+        results[agent.name] = await agent.isAvailable();
+      }
+      setAgentStatus(results);
+    };
+    check();
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -23,19 +36,23 @@ export function InputModal({ stepName, onSubmit, onCancel }: InputModalProps) {
         </p>
 
         <div className="flex gap-2 mb-3">
-          {agents.map((agent) => (
-            <button
-              key={agent.name}
-              onClick={() => setActive(agent.name)}
-              className={`flex-1 py-2 px-3 rounded-lg text-xs text-center border transition-all ${
-                activeAgent?.name === agent.name
-                  ? "border-sky-400 bg-sky-950 text-sky-300"
-                  : "border-slate-600 bg-slate-900 text-slate-400"
-              }`}
-            >
-              {agent.name === "opencode" ? "🟢" : "⭕"} {agent.name}
-            </button>
-          ))}
+          {agents.map((agent) => {
+            const status = agentStatus[agent.name];
+            const isActive = activeAgent?.name === agent.name;
+            return (
+              <button
+                key={agent.name}
+                onClick={() => setActive(agent.name)}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs text-center border transition-all ${
+                  isActive
+                    ? "border-sky-400 bg-sky-950 text-sky-300"
+                    : "border-slate-600 bg-slate-900 text-slate-400"
+                }`}
+              >
+                {status === true ? "🟢" : status === false ? "🔴" : "⏳"} {agent.name}
+              </button>
+            );
+          })}
         </div>
 
         <textarea

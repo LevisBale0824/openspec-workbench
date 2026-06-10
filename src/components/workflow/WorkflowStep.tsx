@@ -36,11 +36,20 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
   };
 
   const handleSubmit = async (prompt: string) => {
+    if (!activeAgent) {
+      alert("没有可用的 AI Agent，请在设置中配置并启动 Agent。");
+      return;
+    }
+
+    const available = await activeAgent.isAvailable();
+    if (!available) {
+      alert(`Agent "${activeAgent.name}" 不可用，请确认服务已启动。\n\nOpenCode: 需要在 localhost:3000 运行\nZero: 需要在 localhost:8080 运行`);
+      return;
+    }
+
     setShowInput(false);
     setPhase("executing");
     clearStreamOutput();
-
-    if (!activeAgent) return;
 
     try {
       for await (const chunk of activeAgent.executeStream({
@@ -55,7 +64,6 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
     }
 
     setPhase("reviewing");
-    // Trigger artifact scan after execution
   };
 
   const handleRetry = () => {
@@ -66,6 +74,17 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
     setPhase("done");
     await advanceStep();
   };
+
+  // Input modal (must check before idle — local state overrides phase)
+  if (showInput) {
+    return (
+      <InputModal
+        stepName={stepName}
+        onSubmit={handleSubmit}
+        onCancel={handleCancelInput}
+      />
+    );
+  }
 
   // Idle state
   if (currentPhase === "idle") {
@@ -92,17 +111,6 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
           </button>
         </div>
       </div>
-    );
-  }
-
-  // Input modal
-  if (showInput) {
-    return (
-      <InputModal
-        stepName={stepName}
-        onSubmit={handleSubmit}
-        onCancel={handleCancelInput}
-      />
     );
   }
 
