@@ -11,6 +11,7 @@ export function WorkbenchLayout() {
     sidebarVisible,
     sidebarWidth,
     setSidebarWidth,
+    editorVisible,
     workflowPanelVisible,
     workflowPanelWidth,
     setWorkflowPanelWidth,
@@ -39,22 +40,28 @@ export function WorkbenchLayout() {
           </>
         )}
 
-        {/* Editor Area */}
-        <div className="flex-1 overflow-hidden bg-slate-950">
-          <EditorArea />
-        </div>
+        {/* Editor Area — hidden when editorVisible is false */}
+        {editorVisible && (
+          <div className="flex-1 overflow-hidden bg-slate-950">
+            <EditorArea />
+          </div>
+        )}
 
-        {/* Workflow Panel */}
+        {/* Workflow Panel — expands to fill when editor hidden */}
         {workflowPanelVisible && (
           <>
-            <PanelResizeHandle
-              side="right"
-              currentWidth={workflowPanelWidth}
-              onResize={setWorkflowPanelWidth}
-            />
+            {editorVisible && (
+              <PanelResizeHandle
+                side="right"
+                currentWidth={workflowPanelWidth}
+                onResize={setWorkflowPanelWidth}
+              />
+            )}
             <div
-              className="flex-shrink-0 bg-slate-950 border-l border-slate-800 overflow-hidden"
-              style={{ width: workflowPanelWidth }}
+              className={`bg-slate-950 border-l border-slate-800 overflow-hidden ${
+                editorVisible ? "flex-shrink-0" : "flex-1"
+              }`}
+              style={editorVisible ? { width: workflowPanelWidth } : undefined}
             >
               <WorkflowPanel />
             </div>
