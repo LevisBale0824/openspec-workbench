@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useWorkflowStore } from "../../stores/workflow";
 import { useAgentStore } from "../../stores/agent";
+import { useProjectStore } from "../../stores/project";
 import { ChatMessage } from "../../agents/types";
 
 export function ChatPanel() {
   const { chatHistory, addChatMessage, currentPhase } = useWorkflowStore();
   const { activeAgent, isAvailable } = useAgentStore();
+  const { projectPath } = useProjectStore();
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -33,7 +35,7 @@ export function ChatPanel() {
     addChatMessage(aiMsg);
 
     try {
-      for await (const chunk of activeAgent.chat([...chatHistory, userMsg])) {
+      for await (const chunk of activeAgent.chat([...chatHistory, userMsg], projectPath)) {
         aiContent += chunk;
         // Update last message
         const { chatHistory: history } = useWorkflowStore.getState();

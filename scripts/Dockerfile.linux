@@ -1,0 +1,54 @@
+FROM centos:7
+
+# Enable EPEL for webkitgtk3 and additional packages
+RUN yum install -y epel-release && \
+    yum install -y \
+        webkitgtk3-devel \
+        gtk3-devel \
+        libappindicator-gtk3-devel \
+        librsvg2-devel \
+        openssl-devel \
+        curl \
+        wget \
+        file \
+        patchelf \
+        gcc \
+        gcc-c++ \
+        make \
+        git && \
+    yum clean all
+
+# Install Node.js 20 from NodeSource
+RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && \
+    yum install -y nodejs && \
+    yum clean all
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Install Rust via rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Add musl target
+RUN rustup target add x86_64-unknown-linux-musl
+
+# Install musl-gcc for linking
+RUN yum install -y musl-gcc || true
+
+# Install linuxdeploy + GTK plugin
+RUN wget -q -O /usr/local/bin/linuxdeploy \
+    https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage && \
+    chmod +x /usr/local/bin/linuxdeploy && \
+    wget -q -O /usr/local/bin/linuxdeploy-plugin-gtk.sh \
+    https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh && \
+    chmod +x /usr/local/bin/linuxdeploy-plugin-gtk.sh
+
+# Set Tauri build environment variables for linuxdeploy
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+WORKDIR /workspace
+
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]

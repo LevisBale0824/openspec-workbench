@@ -1,0 +1,17 @@
+# Linux cross-compilation hints for musl target
+#
+# When building for x86_64-unknown-linux-musl on a Linux host, set the linker:
+#
+#   [target.x86_64-unknown-linux-musl]
+#   linker = "x86_64-linux-musl-gcc"
+#
+# Notes:
+# - This section is intentionally commented out. Do NOT set a project-level
+#   default target — it would break Windows (MSVC) and macOS builds.
+# - Always pass --target explicitly: pnpm tauri build --target x86_64-unknown-linux-musl
+# - Install prerequisites:
+#     rustup target add x86_64-unknown-linux-musl
+#     apt install musl-tools          # Ubuntu/Debian
+#     dnf install musl-gcc            # RHEL/Fedora
+#
+# For AppImage bundling, see scripts/Dockerfile.linux and Makefile.

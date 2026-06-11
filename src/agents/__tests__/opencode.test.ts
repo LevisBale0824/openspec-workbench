@@ -10,7 +10,6 @@ describe("OpenCodeAdapter", () => {
 
   it("reports unavailable when CLI not found", async () => {
     const adapter = new OpenCodeAdapter();
-    // In test environment without Tauri runtime, this should return false
     const available = await adapter.isAvailable();
     expect(available).toBe(false);
   });

@@ -8,6 +8,11 @@ dist-ssr/
 # Tauri build
 src-tauri/target/
 
+# AppImage build artifacts
+*.AppImage
+*.AppImage.zsync
+output/
+
 # IDE
 .vscode/
 .idea/
@@ -26,3 +31,8 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Tool local configs
+.claude/
+.serena/
+.omo/

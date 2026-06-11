@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useWorkflowStore, StepName } from "../../stores/workflow";
 import { useAgentStore } from "../../stores/agent";
+import { useProjectStore, generateSessionId } from "../../stores/project";
 import { InputModal } from "./InputModal";
 import { StreamOutput } from "./StreamOutput";
+import { InteractiveInput } from "./InteractiveInput";
 import {
   CompassIcon,
   FileTextIcon,
@@ -60,10 +62,20 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
     advanceStep,
     appendStreamOutput,
     clearStreamOutput,
+    sessionId,
+    setSessionId,
+    setWaitingForInput,
   } = useWorkflowStore();
   const { activeAgent } = useAgentStore();
+  const { projectPath } = useProjectStore();
   const [showInput, setShowInput] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
+
+  // Interactive execution state
+  const [interactiveInput, setInteractiveInput] = useState("");
+  const [inputMode, setInputMode] = useState<"hidden" | "ready" | "prompted">("hidden");
+  const inputResolverRef = useRef<((answer: string) => void) | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (terminalRef.current) {
@@ -79,6 +91,26 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
 
   const handleCancelInput = () => {
     setShowInput(false);
+  };
+
+  const handleInteractiveSend = () => {
+    if (!interactiveInput.trim()) return;
+    const text = interactiveInput.trim();
+    setInteractiveInput("");
+    if (inputResolverRef.current) {
+      inputResolverRef.current(text);
+      inputResolverRef.current = null;
+      setInputMode("ready");
+      setWaitingForInput(false);
+    }
+  };
+
+  const handleStop = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    inputResolverRef.current = null;
+    setInputMode("hidden");
+    setWaitingForInput(false);
   };
 
   const handleSubmit = async (prompt: string) => {
@@ -97,20 +129,49 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
 
     setShowInput(false);
     setPhase("executing");
+    setInputMode("ready");
+    setInteractiveInput("");
     clearStreamOutput();
+
+    // Generate session ID on first step if not already set
+    const { sessionId: currentSessionId } = useWorkflowStore.getState();
+    const effectiveSessionId = currentSessionId || generateSessionId(projectPath);
+    if (!currentSessionId) {
+      setSessionId(effectiveSessionId);
+    }
+
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController();
 
     try {
       for await (const chunk of activeAgent.executeStream({
         prompt,
-        projectPath: "",
+        projectPath,
         workflow: stepName,
+        sessionId: effectiveSessionId,
+        signal: abortControllerRef.current.signal,
+        onUserInput: async () => {
+          setInputMode("prompted");
+          setWaitingForInput(true);
+          return new Promise<string>((resolve) => {
+            inputResolverRef.current = resolve;
+          });
+        },
       })) {
         appendStreamOutput(chunk);
       }
     } catch (err) {
-      appendStreamOutput(`\n\nError: ${err}`);
+      if ((err as Error).name !== "AbortError") {
+        appendStreamOutput(`\n\nError: ${err}`);
+      } else {
+        appendStreamOutput("\n\n[已停止]");
+      }
     }
 
+    abortControllerRef.current = null;
+    inputResolverRef.current = null;
+    setInputMode("hidden");
+    setWaitingForInput(false);
     setPhase("reviewing");
   };
 
@@ -162,12 +223,16 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
             <PlayIcon size={14} />
             开始 {config.title}
           </button>
+
+          {sessionId && (
+            <p className="text-[10px] text-slate-600 mt-3">Session: {sessionId}</p>
+          )}
         </div>
       </div>
     );
   }
 
-  // Executing state
+  // Executing state — with interactive input
   if (currentPhase === "executing") {
     return (
       <div className="p-3 flex flex-col h-full">
@@ -181,6 +246,28 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
           )}
           <span className="inline-block w-1.5 h-3 bg-sky-400 animate-pulse ml-0.5 align-middle" />
         </div>
+
+        {/* Interactive input bar */}
+        <div className="mt-3 flex flex-col gap-2">
+          <InteractiveInput
+            value={interactiveInput}
+            onChange={setInteractiveInput}
+            onSubmit={handleInteractiveSend}
+            mode={inputMode}
+            disabled={false}
+          />
+
+          {/* Stop button */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleStop}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-red-800 text-red-400 text-[10px] hover:bg-red-500/10 transition-colors"
+            >
+              <span className="w-2 h-2 rounded-sm bg-red-500" />
+              停止
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -192,6 +279,9 @@ export function WorkflowStep({ stepName }: WorkflowStepProps) {
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-3">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         <span className="text-xs text-emerald-400 font-medium">执行完成</span>
+        {sessionId && (
+          <span className="text-[10px] text-slate-600 ml-auto">{sessionId}</span>
+        )}
       </div>
 
       {/* Terminal output */}

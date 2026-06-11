@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:windows": "tauri build --bundles msi,nsis",
+    "build:linux": "tauri build --target x86_64-unknown-linux-musl"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",

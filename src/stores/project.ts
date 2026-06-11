@@ -31,6 +31,15 @@ interface ProjectActions {
   toggleDir: (path: string) => Promise<void>;
 }
 
+export function generateSessionId(projectPath: string): string {
+  let hash = 0;
+  for (let i = 0; i < projectPath.length; i++) {
+    hash = ((hash << 5) - hash) + projectPath.charCodeAt(i);
+    hash |= 0;
+  }
+  return `openspec-${Math.abs(hash).toString(36)}`;
+}
+
 export const useProjectStore = create<ProjectState & ProjectActions>()((set, get) => ({
   projectPath: "",
   changeId: "",

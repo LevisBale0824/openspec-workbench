@@ -45,7 +45,8 @@ export class ZeroAdapter implements AgentAdapter {
 
   async *executeStream(req: AgentRequest): AsyncIterable<string> {
     const { program, args } = this.wrapCommand(["run", req.prompt]);
-    const command = Command.create(program, args);
+    const options = req.projectPath ? { cwd: req.projectPath } : undefined;
+    const command = Command.create(program, args, options);
 
     const queue: { text: string; done: boolean }[] = [];
     let resolveNext: ((value: void) => void) | null = null;
@@ -93,9 +94,9 @@ export class ZeroAdapter implements AgentAdapter {
     }
   }
 
-  async *chat(messages: ChatMessage[]): AsyncIterable<string> {
+  async *chat(messages: ChatMessage[], projectPath: string): AsyncIterable<string> {
     const lastMessage = messages[messages.length - 1];
-    yield* this.executeStream({ prompt: lastMessage.content, projectPath: "" });
+    yield* this.executeStream({ prompt: lastMessage.content, projectPath });
   }
 
   async getConfig(): Promise<AgentConfig> {

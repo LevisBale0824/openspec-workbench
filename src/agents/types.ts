@@ -8,7 +8,7 @@ export interface AgentAdapter {
 
   execute(req: AgentRequest): Promise<AgentResponse>;
   executeStream(req: AgentRequest): AsyncIterable<string>;
-  chat(messages: ChatMessage[]): AsyncIterable<string>;
+  chat(messages: ChatMessage[], projectPath: string): AsyncIterable<string>;
 
   getConfig(): Promise<AgentConfig>;
 }
@@ -18,6 +18,9 @@ export interface AgentRequest {
   projectPath: string;
   workflow?: "explore" | "propose" | "apply" | "archive";
   files?: string[];
+  sessionId?: string;
+  onUserInput?: () => Promise<string>;
+  signal?: AbortSignal;
 }
 
 export interface AgentResponse {

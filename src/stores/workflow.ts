@@ -12,6 +12,8 @@ interface WorkflowState {
   reviewedArtifacts: Set<string>;
   chatHistory: ChatMessage[];
   streamOutput: string;
+  sessionId: string;
+  waitingForInput: boolean;
 }
 
 interface WorkflowActions {
@@ -25,6 +27,8 @@ interface WorkflowActions {
   appendStreamOutput: (chunk: string) => void;
   clearStreamOutput: () => void;
   isAllReviewed: () => boolean;
+  setSessionId: (id: string) => void;
+  setWaitingForInput: (waiting: boolean) => void;
 }
 
 export const STEP_ORDER: StepName[] = ["explore", "propose", "apply", "archive"];
@@ -36,6 +40,8 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()((set, 
   reviewedArtifacts: new Set<string>(),
   chatHistory: [],
   streamOutput: "",
+  sessionId: "",
+  waitingForInput: false,
 
   loadState: async () => {
     const state = await invoke<{ current_step: StepName; current_phase: StepPhase }>("get_workflow_state");
@@ -84,4 +90,6 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()((set, 
     const { artifacts, reviewedArtifacts } = get();
     return artifacts.length > 0 && artifacts.every((a) => reviewedArtifacts.has(a.id));
   },
+  setSessionId: (id) => set({ sessionId: id }),
+  setWaitingForInput: (waiting) => set({ waitingForInput: waiting }),
 }));

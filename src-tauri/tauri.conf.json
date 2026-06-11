@@ -32,6 +32,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "OpenSpec Workbench",
+    "longDescription": "Visual desktop client for the OpenSpec explore-propose-apply-archive workflow."
   }
 }
