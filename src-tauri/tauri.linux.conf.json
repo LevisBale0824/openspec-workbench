@@ -1,9 +1,0 @@
-{
-  "bundle": {
-    "targets": ["appimage"],
-    "linux": {
-      "deb": { "depends": [] },
-      "rpm": { "epoch": 0, "release": "1" }
-    }
-  }
-}

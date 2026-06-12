@@ -1,22 +1,38 @@
-/// <reference types="vitest" />
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
+import { resolve } from "path";
 
-const host = process.env.TAURI_DEV_HOST;
-
-export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
-  clearScreen: false,
-  test: {
-    globals: true,
-    environment: "jsdom",
+export default defineConfig({
+  root: "app",
+  plugins: [vue(), tailwindcss()],
+  base: "./",
+  resolve: {
+    alias: {
+      "@": resolve(__dirname, "app"),
+    },
+  },
+  build: {
+    outDir: resolve(__dirname, "dist"),
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vue: ["vue", "vue-router", "vue-i18n"],
+        },
+      },
+    },
+    target: "es2022",
+  },
+  worker: {
+    format: "es",
   },
   server: {
-    port: 1420,
+    port: 5173,
     strictPort: true,
-    host: host || false,
-    hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
-    watch: { ignored: ["**/src-tauri/**"] },
   },
-}));
+  test: {
+    globals: true,
+    environment: "happy-dom",
+  },
+});

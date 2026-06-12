@@ -1,0 +1,166 @@
+// ---------------------------------------------------------------------------
+// OpenCode Backend Adapter
+// ---------------------------------------------------------------------------
+// Delegates all BackendAdapter methods to the opencode REST API utility.
+// Ported from opencode-visualizer-cn/app/backends/openCodeAdapter.ts
+// ---------------------------------------------------------------------------
+
+import * as opencodeApi from "../utils/opencode";
+import type { BackendAdapter } from "./types";
+
+export function createOpenCodeAdapter(): BackendAdapter {
+  return {
+    kind: "opencode",
+    label: "OpenCode",
+    capabilities: {
+      projects: true,
+      worktrees: true,
+      sessions: true,
+      sessionFork: true,
+      sessionRevert: true,
+      sessionRename: true,
+      sessionArchive: true,
+      sessionUnarchive: true,
+      sessionDelete: true,
+      sessionPin: true,
+      sessionUnpin: true,
+      sessionCompact: false,
+      files: true,
+      terminal: true,
+      permissions: true,
+      questions: true,
+      todos: true,
+      status: true,
+      providerConfig: true,
+      imageAttachmentsOnly: false,
+      projectPickerCreatesSession: false,
+      ptyExitRequiresSyntheticEvent: false,
+      ptyRefreshArtifactsOnSuccess: false,
+      strictSandboxPaths: false,
+      sessionManagementMode: "standard",
+    },
+
+    configure: (options) => {
+      if (options.baseUrl !== undefined)
+        opencodeApi.setBaseUrl(options.baseUrl);
+      if (options.authorization !== undefined)
+        opencodeApi.setAuthorization(options.authorization);
+    },
+
+    // ── Sessions ────────────────────────────────────────────────────
+    createSession: (directory) => opencodeApi.createSession(directory),
+    forkSession: (sessionId, messageId, directory) =>
+      opencodeApi.forkSession(sessionId, messageId, directory),
+    updateSession: (sessionId, payload, directory) =>
+      opencodeApi.updateSession(sessionId, payload, directory),
+    deleteSession: (sessionId, directory) =>
+      opencodeApi.deleteSession(sessionId, directory),
+    revertSession: (sessionId, messageId, directory) =>
+      opencodeApi.revertSession(sessionId, messageId, directory),
+    unrevertSession: (sessionId, directory) =>
+      opencodeApi.unrevertSession(sessionId, directory),
+    listSessions: (options) => opencodeApi.listSessions(options),
+
+    // ── Projects ────────────────────────────────────────────────────
+    updateProject: (projectId, payload) =>
+      opencodeApi.updateProject(projectId, payload),
+    createWorktree: (directory) => opencodeApi.createWorktree(directory),
+    deleteWorktree: (directory, targetDirectory) =>
+      opencodeApi.deleteWorktree(directory, targetDirectory),
+
+    // ── Config / Info ───────────────────────────────────────────────
+    getPathInfo: (options) => opencodeApi.getPathInfo(options),
+    getGlobalConfig: () => opencodeApi.getGlobalConfig(),
+    updateGlobalConfig: (payload) =>
+      opencodeApi.updateGlobalConfig(payload),
+
+    // ── Files ───────────────────────────────────────────────────────
+    listFiles: (payload, options) =>
+      opencodeApi.listFiles(payload, options),
+    readFileContent: (payload, options) =>
+      opencodeApi.readFileContent(payload, options),
+    readFileContentBytes: (payload, options) =>
+      opencodeApi.readFileContentBytes(payload, options),
+    getSessionDiff: (payload) => opencodeApi.getSessionDiff(payload),
+
+    // ── Project / Worktree / VCS ────────────────────────────────────
+    listProjects: (directory) => opencodeApi.listProjects(directory),
+    getCurrentProject: (directory) =>
+      opencodeApi.getCurrentProject(directory),
+    getSession: (sessionId, directory, request) =>
+      opencodeApi.getSession(sessionId, directory, request),
+    getSessionChildren: (sessionId, directory, request) =>
+      opencodeApi.getSessionChildren(sessionId, directory, request),
+    listWorktrees: (directory) => opencodeApi.listWorktrees(directory),
+    getVcsInfo: (directory) => opencodeApi.getVcsInfo(directory),
+
+    // ── Providers ───────────────────────────────────────────────────
+    listProviders: () => opencodeApi.listProviders(),
+    listProviderAuthMethods: (options) =>
+      opencodeApi.listProviderAuthMethods(options),
+    authorizeProviderOAuth: (providerId, payload) =>
+      opencodeApi.authorizeProviderOAuth(providerId, payload),
+    completeProviderOAuth: (providerId, payload) =>
+      opencodeApi.completeProviderOAuth(providerId, payload),
+    setProviderAuth: (providerId, payload) =>
+      opencodeApi.setProviderAuth(providerId, payload),
+    deleteProviderAuth: (providerId) =>
+      opencodeApi.deleteProviderAuth(providerId),
+
+    // ── Agents / Commands ───────────────────────────────────────────
+    listAgents: () => opencodeApi.listAgents(),
+    listCommands: (directory) => opencodeApi.listCommands(directory),
+
+    // ── Status / Permissions / Questions ────────────────────────────
+    getSessionStatusMap: (directory, options) =>
+      opencodeApi.getSessionStatusMap(directory, options),
+    listPendingPermissions: (directory) =>
+      opencodeApi.listPendingPermissions(directory),
+    listPendingQuestions: (directory) =>
+      opencodeApi.listPendingQuestions(directory),
+
+    // ── Messages ────────────────────────────────────────────────────
+    listSessionMessages: (sessionId, options) =>
+      opencodeApi.listSessionMessages(sessionId, options),
+    getSessionMessage: (sessionId, messageId, directory) =>
+      opencodeApi.getSessionMessage(sessionId, messageId, directory),
+    getSessionTodos: (sessionId, directory) =>
+      opencodeApi.getSessionTodos(sessionId, directory),
+
+    // ── PTY ─────────────────────────────────────────────────────────
+    listPtys: (directory) => opencodeApi.listPtys(directory),
+    createPty: (payload, options) =>
+      opencodeApi.createPty(payload, options),
+    updatePtySize: (ptyId, payload) =>
+      opencodeApi.updatePtySize(ptyId, payload),
+    deletePty: (ptyId, directory) =>
+      opencodeApi.deletePty(ptyId, directory),
+    createPtyWebSocketUrl: (path, params, credentials) =>
+      opencodeApi.createWsUrl(path, params, credentials),
+
+    // ── Execution ───────────────────────────────────────────────────
+    sendCommand: (sessionId, payload) =>
+      opencodeApi.sendCommand(sessionId, payload),
+    sendPromptAsync: (sessionId, payload) =>
+      opencodeApi.sendPromptAsync(sessionId, payload),
+    abortSession: (sessionId, directory) =>
+      opencodeApi.abortSession(sessionId, directory),
+    patchMessagePart: (payload) =>
+      opencodeApi.patchMessagePart(payload),
+
+    // ── Permission / Question replies ───────────────────────────────
+    replyPermission: (requestId, payload) =>
+      opencodeApi.replyPermission(requestId, payload),
+    replyQuestion: (requestId, payload) =>
+      opencodeApi.replyQuestion(requestId, payload),
+    rejectQuestion: (requestId, directory) =>
+      opencodeApi.rejectQuestion(requestId, directory),
+
+    // ── Health / MCP / LSP / Skills ─────────────────────────────────
+    getGlobalHealth: () => opencodeApi.getGlobalHealth(),
+    getMcpStatus: () => opencodeApi.getMcpStatus(),
+    getLspStatus: () => opencodeApi.getLspStatus(),
+    updateMcp: (payload) => opencodeApi.updateMcp(payload),
+    getSkillStatus: () => opencodeApi.getSkillStatus(),
+  };
+}
