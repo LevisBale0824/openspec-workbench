@@ -7,10 +7,16 @@ import type { SessionInfo } from "../types/sse";
 const { t } = useI18n();
 const activeTab = ref<"sessions" | "files">("sessions");
 
-defineProps<{
-  sessions: SessionInfo[];
-  activeSessionId: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    sessions?: SessionInfo[];
+    activeSessionId?: string;
+  }>(),
+  {
+    sessions: () => [],
+    activeSessionId: "",
+  },
+);
 
 const emit = defineEmits<{
   "select-session": [sessionId: string];

@@ -5,10 +5,16 @@ import type { SessionInfo } from "../types/sse";
 
 const { t } = useI18n();
 
-const props = defineProps<{
-  sessions: SessionInfo[];
-  activeSessionId: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    sessions?: SessionInfo[];
+    activeSessionId?: string;
+  }>(),
+  {
+    sessions: () => [],
+    activeSessionId: "",
+  },
+);
 
 const emit = defineEmits<{
   select: [sessionId: string];
