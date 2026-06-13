@@ -55,6 +55,13 @@ function cancelRendering() {
   cancelRenderTasks = [];
 }
 
+function fullFileContextLines(diff: MessageDiffEntry): number | undefined {
+  if (diff.before === undefined && diff.after === undefined) return undefined;
+  const beforeLines = (diff.before ?? "").split("\n").length;
+  const afterLines = (diff.after ?? "").split("\n").length;
+  return Math.max(beforeLines, afterLines);
+}
+
 watch(
   () => props.diffs,
   (diffs) => {
@@ -67,14 +74,17 @@ watch(
         return;
       }
 
+      const hasFileSnapshot =
+        diff.before !== undefined || diff.after !== undefined;
       const task = startRenderWorkerHtml({
         id: `message-diff:${diff.file}:${index}:${Date.now()}`,
         code: diff.before ?? "",
-        patch: diff.diff || undefined,
-        after: diff.after,
+        patch: hasFileSnapshot ? undefined : diff.diff || undefined,
+        after: hasFileSnapshot ? diff.after ?? "" : diff.after,
         lang: languageFromFile(diff.file),
         variant: "diff",
         gutterMode: "double",
+        diffContextLines: fullFileContextLines(diff),
       });
       cancelRenderTasks.push(task.cancel);
       task.promise

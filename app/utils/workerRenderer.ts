@@ -21,6 +21,7 @@ export type RenderRequest = {
   grepPattern?: string;
   lineOffset?: number;
   lineLimit?: number;
+  diffContextLines?: number;
   files?: string[];
   copyButtonLabel?: string;
   copiedLabel?: string;
@@ -87,6 +88,7 @@ function getCacheKey(req: RenderRequest): string {
     req.grepPattern ?? "",
     String(req.lineOffset ?? ""),
     String(req.lineLimit ?? ""),
+    String(req.diffContextLines ?? ""),
     normalizeFiles(req.files),
     req.copyButtonLabel ?? "",
     req.copiedLabel ?? "",

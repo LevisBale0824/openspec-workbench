@@ -31,6 +31,7 @@ type RenderRequest = {
   grepPattern?: string;
   lineOffset?: number;
   lineLimit?: number;
+  diffContextLines?: number;
   files?: string[];
 };
 
@@ -1133,7 +1134,11 @@ function renderRequest(request: RenderRequest): Promise<string> {
 
   // before/after without patch — generate unified diff from the two texts
   if (request.after !== undefined) {
-    const patch = generateUnifiedDiff(request.code, request.after);
+    const patch = generateUnifiedDiff(
+      request.code,
+      request.after,
+      request.diffContextLines,
+    );
     if (patch) {
       return buildDiffHtmlFromCode(
         request.code,
