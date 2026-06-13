@@ -13,6 +13,7 @@ export default {
     files: "文件",
     noSessions: "暂无会话",
     newSession: "新建会话",
+    deleteSession: "删除会话",
     justNow: "刚刚",
   },
   welcome: {

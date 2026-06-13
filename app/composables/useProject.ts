@@ -3,6 +3,12 @@
 // ---------------------------------------------------------------------------
 
 import { reactive } from "vue";
+import {
+  isElectron,
+  selectDirectory,
+  readDirectory,
+} from "../utils/electronBridge";
+import type { DirEntry } from "../types/electron";
 
 export type FileNode = {
   name: string;
@@ -32,44 +38,22 @@ const state = reactive<ProjectState>({
   error: "",
 });
 
-async function readDirectory(
+async function readDirectoryFromHandle(
   handle: FileSystemDirectoryHandle,
   parentPath: string,
 ): Promise<FileNode[]> {
   const nodes: FileNode[] = [];
-  try {
-    // @ts-expect-error
-    for await (const [name, child] of handle.entries()) {
-      // @ts-expect-error
-      const kind = child.kind as "file" | "directory";
-      const path = parentPath ? `${parentPath}/${name}` : name;
-      const node: FileNode = { name, kind, path };
-      if (kind === "directory") {
-        // @ts-expect-error
-        node.handle = child as FileSystemDirectoryHandle;
-        node.children = [];
-        node.expanded = false;
-        node.loaded = false;
-      }
-      nodes.push(node);
+  for await (const [name, child] of handle.entries()) {
+    const kind = child.kind as "file" | "directory";
+    const path = parentPath ? `${parentPath}/${name}` : name;
+    const node: FileNode = { name, kind, path };
+    if (kind === "directory") {
+      node.handle = child as FileSystemDirectoryHandle;
+      node.children = [];
+      node.expanded = false;
+      node.loaded = false;
     }
-  } catch {
-    // @ts-expect-error
-    for await (const child of handle.values()) {
-      // @ts-expect-error
-      const kind = child.kind as "file" | "directory";
-      const name = child.name;
-      const path = parentPath ? `${parentPath}/${name}` : name;
-      const node: FileNode = { name, kind, path };
-      if (kind === "directory") {
-        // @ts-expect-error
-        node.handle = child as FileSystemDirectoryHandle;
-        node.children = [];
-        node.expanded = false;
-        node.loaded = false;
-      }
-      nodes.push(node);
-    }
+    nodes.push(node);
   }
   // Sort: directories first, then files, alphabetically
   nodes.sort((a, b) => {
@@ -88,7 +72,7 @@ export function useProject() {
     state.error = "";
 
     try {
-      const children = await readDirectory(handle, "");
+      const children = await readDirectoryFromHandle(handle, "");
       state.root = {
         name: handle.name,
         kind: "directory",
@@ -107,23 +91,81 @@ export function useProject() {
   }
 
   async function toggleNode(node: FileNode) {
-    if (node.kind !== "directory" || !node.handle) return;
+    if (node.kind !== "directory") return;
 
-    if (!node.loaded) {
-      const children = await readDirectory(node.handle, node.path);
-      node.children = children;
-      node.loaded = true;
+    // Web mode: expand via FileSystemDirectoryHandle
+    if (node.handle) {
+      if (!node.loaded) {
+        const children = await readDirectoryFromHandle(node.handle, node.path);
+        node.children = children;
+        node.loaded = true;
+      }
+      node.expanded = !node.expanded;
+      return;
     }
-    node.expanded = !node.expanded;
+
+    // Electron mode: expand via IPC using absolute root + relative path
+    if (isElectron() && state.directoryPath) {
+      if (!node.loaded) {
+        const entries = await readDirectory(state.directoryPath, node.path);
+        node.children = (entries ?? []).map(entryToFileNode);
+        node.loaded = true;
+      }
+      node.expanded = !node.expanded;
+    }
   }
 
   function openDirectoryPath(path: string) {
+    // In Electron, defer to the IPC-backed loader so the tree actually populates.
+    if (isElectron()) {
+      void openDirectoryPathElectron(path);
+      return;
+    }
     state.rootHandle = null;
     state.directoryName = path.split(/[/\\]/).pop() || path;
     state.directoryPath = path;
     state.root = null;
     state.loading = false;
     state.error = "";
+  }
+
+  function entryToFileNode(entry: DirEntry): FileNode {
+    const node: FileNode = {
+      name: entry.name,
+      kind: entry.kind,
+      path: entry.path,
+    };
+    if (entry.kind === "directory") {
+      node.children = [];
+      node.expanded = false;
+      node.loaded = false;
+    }
+    return node;
+  }
+
+  async function openDirectoryPathElectron(absPath: string) {
+    state.rootHandle = null;
+    state.directoryName = absPath.split(/[/\\]/).pop() || absPath;
+    state.directoryPath = absPath;
+    state.loading = true;
+    state.error = "";
+    try {
+      const entries = await readDirectory(absPath, "");
+      const children = (entries ?? []).map(entryToFileNode);
+      state.root = {
+        name: state.directoryName,
+        kind: "directory",
+        path: "",
+        children,
+        expanded: true,
+        loaded: true,
+      };
+    } catch (e) {
+      console.error("[useProject] electron read error:", e);
+      state.error = String(e);
+    } finally {
+      state.loading = false;
+    }
   }
 
   function clearProject() {
@@ -135,9 +177,18 @@ export function useProject() {
     state.error = "";
   }
 
+  async function openDirectoryNative(): Promise<boolean> {
+    if (!isElectron()) return false;
+    const dirPath = await selectDirectory();
+    if (!dirPath) return false;
+    await openDirectoryPathElectron(dirPath);
+    return true;
+  }
+
   return {
     state,
     openDirectoryHandle,
+    openDirectoryNative,
     toggleNode,
     openDirectoryPath,
     clearProject,

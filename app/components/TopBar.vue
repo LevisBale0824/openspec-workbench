@@ -1,23 +1,59 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
+import { useProject } from "../composables/useProject";
+import { isElectron, selectDirectory } from "../utils/electronBridge";
 
 const { t } = useI18n();
+const router = useRouter();
+const project = useProject();
+const projectState = computed(() => project.state);
 
 defineEmits<{
   "toggle-settings": [];
 }>();
+
+const projectName = computed(() => projectState.value.directoryName || "");
+
+async function openFolder() {
+  // Browser: go to the Welcome page which has the directory picker UI.
+  if (!isElectron()) {
+    router.push({ name: "home" });
+    return;
+  }
+  // Electron: trigger the native picker, then load the tree + jump to chat.
+  const dir = await selectDirectory();
+  if (!dir) return;
+  project.openDirectoryPath(dir);
+  router.push({ name: "chat" });
+}
 </script>
 
 <template>
   <header class="h-10 flex items-center justify-between px-3 bg-surface-900 border-b border-surface-800 select-none">
-    <!-- Left: Logo + Title -->
-    <div class="flex items-center gap-2">
-      <div class="w-5 h-5 rounded-full bg-gradient-to-br from-accent-cyan to-accent-indigo" />
-      <span class="text-sm font-semibold text-surface-200">{{ t("app.title") }}</span>
+    <!-- Left: Logo + Title + Current Project -->
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-5 h-5 rounded-full bg-gradient-to-br from-accent-cyan to-accent-indigo flex-shrink-0" />
+      <span class="text-sm font-semibold text-surface-200 flex-shrink-0">{{ t("app.title") }}</span>
+      <template v-if="projectName">
+        <span class="text-surface-600">/</span>
+        <button
+          class="flex items-center gap-1 text-xs text-surface-300 hover:text-accent-cyan transition-colors truncate min-w-0"
+          :title="projectState.directoryPath"
+          @click="openFolder"
+        >
+          <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          <span class="truncate">{{ projectName }}</span>
+        </button>
+      </template>
     </div>
 
     <!-- Right: Actions -->
-    <div class="flex items-center gap-1">
+    <div class="flex items-center gap-1 flex-shrink-0">
       <button
         class="px-2 py-1 text-xs text-surface-400 hover:text-surface-200 hover:bg-surface-800 rounded transition-colors"
         @click="$emit('toggle-settings')"

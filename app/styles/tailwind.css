@@ -45,3 +45,109 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-surface-600);
 }
+
+/* ── Markdown content (chat assistant messages) ─────────────────────────── */
+
+.md-content {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-surface-200);
+  word-break: break-word;
+}
+.md-content > *:first-child { margin-top: 0; }
+.md-content > *:last-child { margin-bottom: 0; }
+
+.md-content p {
+  margin: 0.5em 0;
+}
+.md-content h1,
+.md-content h2,
+.md-content h3,
+.md-content h4 {
+  margin: 1em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-surface-100);
+}
+.md-content h1 { font-size: 1.3em; }
+.md-content h2 { font-size: 1.2em; }
+.md-content h3 { font-size: 1.1em; }
+.md-content h4 { font-size: 1em; }
+
+.md-content ul,
+.md-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.md-content ul { list-style: disc; }
+.md-content ol { list-style: decimal; }
+.md-content li { margin: 0.2em 0; }
+.md-content li::marker { color: var(--color-surface-500); }
+
+.md-content a {
+  color: var(--color-accent-cyan);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent-cyan) 35%, transparent);
+}
+.md-content a:hover { border-bottom-color: var(--color-accent-cyan); }
+
+.md-content blockquote {
+  margin: 0.6em 0;
+  padding: 0.2em 0.9em;
+  border-left: 3px solid var(--color-surface-700);
+  color: var(--color-surface-400);
+}
+
+.md-content code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--color-surface-800);
+  color: var(--color-accent-amber);
+}
+.md-content pre {
+  margin: 0.6em 0;
+  padding: 0.75em 0.9em;
+  border-radius: 8px;
+  background: var(--color-surface-950);
+  border: 1px solid var(--color-surface-800);
+  overflow-x: auto;
+}
+.md-content pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  color: var(--color-surface-200);
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.md-content hr {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid var(--color-surface-800);
+}
+
+.md-content table {
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  display: block;
+  overflow-x: auto;
+}
+.md-content th,
+.md-content td {
+  padding: 0.35em 0.7em;
+  border: 1px solid var(--color-surface-700);
+  text-align: left;
+}
+.md-content th {
+  background: var(--color-surface-800);
+  font-weight: 600;
+}
+
+.md-content img { max-width: 100%; border-radius: 6px; }
+.md-content strong { color: var(--color-surface-100); font-weight: 600; }
+

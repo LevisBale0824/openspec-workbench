@@ -35,13 +35,16 @@ export function useBackendMessageSend(options: MessageSendOptions) {
         throw new Error("Backend does not support sending prompts");
       }
 
+      const dir = options.activeDirectory.value || undefined;
+      const modelId = options.modelId.value;
+      const providerId = options.providerId.value;
+      const model = modelId
+        ? { modelID: modelId, ...(providerId ? { providerID: providerId } : {}) }
+        : undefined;
       await adapter.sendPromptAsync(sessionId, {
-        directory: options.activeDirectory.value,
-        agent: options.agent.value || "code",
-        model: {
-          providerID: options.providerId.value || undefined,
-          modelID: options.modelId.value,
-        },
+        directory: dir ?? "",
+        agent: options.agent.value || "general",
+        model,
         variant: options.variant.value || undefined,
         parts: [{ type: "text", text }],
       });

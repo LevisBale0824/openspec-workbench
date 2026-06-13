@@ -18,11 +18,15 @@ import type {
   MessageUsage,
 } from "../types/message";
 import type {
+  FileDiff,
   MessageInfo,
   MessagePart,
   MessagePartDeltaPacket,
   MessagePartUpdatedPacket,
   MessageUpdatedPacket,
+  SessionDiffPacket,
+  TextPart,
+  UserMessageInfo,
 } from "../types/sse";
 import type { SessionScope } from "./useGlobalEvents";
 import { useDeltaAccumulator } from "./useDeltaAccumulator";
@@ -74,6 +78,23 @@ function triggerCollection() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+const SYSTEM_REMINDER_RE = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
+const OMO_INIT_COMMENT_RE = /<!--\s*OMO_INTERNAL_INITIATOR\s*-->/g;
+
+/** Remove agent-injected `<system-reminder>` blocks and OMO initiator markers. */
+export function stripSystemReminder(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(SYSTEM_REMINDER_RE, "")
+    .replace(OMO_INIT_COMMENT_RE, "")
+    .trim();
+}
+
+/** True when a text chunk still carries user-visible content after stripping. */
+export function isSignificantText(text: string): boolean {
+  return stripSystemReminder(text).length > 0;
+}
 
 function createMessageEntry(): MessageEntry {
   return { parts: new Set<ShallowRef<MessagePart>>() };
@@ -169,7 +190,7 @@ function resolveStatus(info?: MessageInfo): MessageStatus {
   if (!info) return "streaming";
   if (info.role === "user") return "complete";
   if (info.error || info.finish === "error") return "error";
-  if (info.time.completed !== undefined || info.finish) return "complete";
+  if (info.time?.completed !== undefined || info.finish) return "complete";
   return "streaming";
 }
 
@@ -184,8 +205,8 @@ function resolveError(info?: MessageInfo): MessageError {
 }
 
 function byTimeThenId(a: MessageInfo, b: MessageInfo): number {
-  const aTime = asNumber(a.time.created) ?? 0;
-  const bTime = asNumber(b.time.created) ?? 0;
+  const aTime = asNumber(a.time?.created) ?? 0;
+  const bTime = asNumber(b.time?.created) ?? 0;
   if (aTime !== bTime) return aTime - bTime;
   return a.id.localeCompare(b.id);
 }
@@ -195,6 +216,7 @@ function byTimeThenId(a: MessageInfo, b: MessageInfo): number {
 const acc = useDeltaAccumulator();
 const messages = shallowRef(new Map<string, ShallowRef<MessageEntry>>());
 const parts = new Map<string, ShallowRef<MessagePart>>();
+const sessionDiffs = shallowRef(new Map<string, FileDiff[]>());
 
 // ── Computed indices ──────────────────────────────────────────────────────
 
@@ -261,6 +283,12 @@ function partLookupKey(messageId: string, partId: string): string {
 }
 
 function updateMessage(info: MessageInfo, notifyCollection = true) {
+  // Auto-clean optimistic pending messages when a real user message arrives
+  if (info.role === "user" && !info.id.startsWith("pending:")) {
+    for (const id of [...messages.value.keys()]) {
+      if (id.startsWith("pending:")) removeMessage(id);
+    }
+  }
   const messageRef = ensureMessage(info.id, notifyCollection);
   messageRef.value.info = info;
   triggerMessageRef(messageRef);
@@ -270,7 +298,17 @@ function updatePart(part: MessagePart, notifyCollection = true) {
   const key = partLookupKey(part.messageID, part.id);
   const existing = parts.get(key);
   if (existing) {
-    existing.value = part;
+    const current = existing.value;
+    if (
+      current.type === "text" &&
+      part.type === "text" &&
+      current.text &&
+      part.text.length < current.text.length
+    ) {
+      existing.value = { ...part, text: current.text };
+    } else {
+      existing.value = part;
+    }
     triggerRef(existing);
     return;
   }
@@ -279,6 +317,66 @@ function updatePart(part: MessagePart, notifyCollection = true) {
   const messageRef = ensureMessage(part.messageID, notifyCollection);
   messageRef.value.parts.add(partRef);
   triggerMessageRef(messageRef);
+}
+
+function applyPartDelta(delta: MessagePartDeltaPacket) {
+  const key = partLookupKey(delta.messageID, delta.partID);
+  let partRef = parts.get(key);
+
+  if (!partRef) {
+    if (delta.field !== "text") return;
+    const part: TextPart = {
+      id: delta.partID,
+      sessionID: delta.sessionID,
+      messageID: delta.messageID,
+      type: "text",
+      text: "",
+    };
+    partRef = shallowRef(part);
+    parts.set(key, partRef);
+    const messageRef = ensureMessage(delta.messageID);
+    messageRef.value.parts.add(partRef);
+    triggerMessageRef(messageRef);
+  }
+
+  const current = partRef.value as MessagePart & Record<string, unknown>;
+  const value = current[delta.field];
+  current[delta.field] =
+    typeof value === "string" ? value + delta.delta : delta.delta;
+  triggerRef(partRef);
+
+  const messageRef = messages.value.get(delta.messageID);
+  if (messageRef) triggerMessageRef(messageRef);
+}
+
+// ── Optimistic (pending) messages ─────────────────────────────────────────
+
+function addPendingUserMessage(
+  sessionId: string,
+  text: string,
+  agentName: string,
+): string {
+  const now = Date.now();
+  const tempId = `pending:${now}`;
+  const partId = `pending:part:${now}`;
+  const info: UserMessageInfo = {
+    id: tempId,
+    sessionID: sessionId,
+    role: "user",
+    time: { created: now },
+    agent: agentName,
+    model: { providerID: "", modelID: "" },
+  };
+  const part: TextPart = {
+    id: partId,
+    sessionID: sessionId,
+    messageID: tempId,
+    type: "text",
+    text,
+  };
+  updateMessage(info);
+  updatePart(part);
+  return tempId;
 }
 
 // ── SSE binding ───────────────────────────────────────────────────────────
@@ -298,14 +396,7 @@ function bindScope(scope: SessionScope) {
   unsubs.push(
     scope.on("message.part.delta", (packet: unknown) => {
       const delta = packet as MessagePartDeltaPacket;
-      const accumulated = acc.getMessage(delta.messageID);
-      const accPart = accumulated?.parts.get(delta.partID);
-      if (!accPart) return;
-      const key = partLookupKey(delta.messageID, delta.partID);
-      const partRef = parts.get(key);
-      if (!partRef) return;
-      partRef.value = accPart;
-      triggerRef(partRef);
+      applyPartDelta(delta);
     }),
   );
 
@@ -314,12 +405,30 @@ function bindScope(scope: SessionScope) {
       updateMessage((packet as MessageUpdatedPacket).info);
     }),
   );
+
+  unsubs.push(
+    scope.on("session.diff", (packet: unknown) => {
+      const { sessionID, diff } = packet as SessionDiffPacket;
+      if (!sessionID) return;
+      sessionDiffs.value.set(sessionID, Array.isArray(diff) ? diff : []);
+      triggerRef(sessionDiffs);
+    }),
+  );
 }
 
 // ── Public query API ──────────────────────────────────────────────────────
 
 function get(id: string): MessageInfo | undefined {
   return messages.value.get(id)?.value.info;
+}
+
+function list(): MessageInfo[] {
+  const result: MessageInfo[] = [];
+  for (const messageRef of messages.value.values()) {
+    const info = messageRef.value.info;
+    if (info) result.push(info);
+  }
+  return result.sort(byTimeThenId);
 }
 
 function getParts(id: string): MessagePart[] {
@@ -399,6 +508,25 @@ function getError(id: string): MessageError {
   return resolveError(get(id));
 }
 
+/**
+ * Whether a message should render in the chat transcript.
+ * Synthetic / system-reminder-injected user messages are hidden so the
+ * conversation isn't polluted by agent-framework bookkeeping.
+ */
+function isDisplayable(id: string): boolean {
+  const info = get(id);
+  if (!info) return false;
+  if (info.role !== "user") return true;
+  // Pending optimistic messages are always displayable.
+  if (id.startsWith("pending:")) return true;
+  for (const part of getParts(id)) {
+    if (part.type !== "text") continue;
+    if (part.synthetic) continue;
+    if (isSignificantText(part.text)) return true;
+  }
+  return false;
+}
+
 function getDiffs(id: string): MessageDiffEntry[] | undefined {
   const info = get(id);
   if (!info || info.role !== "user" || !info.summary?.diffs) return undefined;
@@ -415,6 +543,29 @@ function getDiffs(id: string): MessageDiffEntry[] | undefined {
   return result.length > 0 ? result : undefined;
 }
 
+function getSessionDiffs(sessionId: string): MessageDiffEntry[] | undefined {
+  const diffs = sessionDiffs.value.get(sessionId);
+  if (!diffs || diffs.length === 0) return undefined;
+  const result: MessageDiffEntry[] = [];
+  for (const diff of diffs) {
+    if (!diff.file) continue;
+    result.push({
+      file: diff.file,
+      diff: diff.patch ?? "",
+      before: diff.before,
+      after: diff.after,
+    });
+  }
+  return result.length > 0 ? result : undefined;
+}
+
+function getLatestAssistantMessageId(sessionId: string): string | undefined {
+  const assistants = list()
+    .filter((message) => message.sessionID === sessionId && message.role === "assistant")
+    .sort(byTimeThenId);
+  return assistants[assistants.length - 1]?.id;
+}
+
 function getModelPath(id: string): string | undefined {
   const info = get(id);
   if (!info) return undefined;
@@ -427,15 +578,15 @@ function getModelPath(id: string): string | undefined {
 function getTime(id: string): number | undefined {
   const info = get(id);
   if (!info) return undefined;
-  return asNumber(info.time.created);
+  return asNumber(info.time?.created);
 }
 
 function getCompletedTime(id: string): number | undefined {
   const info = get(id);
   if (!info) return undefined;
   if (info.role === "assistant")
-    return asNumber(info.time.completed) ?? asNumber(info.time.created);
-  return asNumber(info.time.created);
+    return asNumber(info.time?.completed) ?? asNumber(info.time?.created);
+  return asNumber(info.time?.created);
 }
 
 function getChildren(parentId: string): MessageInfo[] {
@@ -637,6 +788,8 @@ function tryLoadFromCache(sessionId: string): boolean {
 function reset() {
   messages.value.clear();
   parts.clear();
+  sessionDiffs.value.clear();
+  triggerRef(sessionDiffs);
   triggerCollection();
 }
 
@@ -654,6 +807,8 @@ function removeMessage(id: string) {
 function dispose() {
   for (const unsub of unsubs) unsub();
   unsubs.length = 0;
+  sessionDiffs.value.clear();
+  triggerRef(sessionDiffs);
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
@@ -664,6 +819,7 @@ export function useMessages() {
     roots,
     streaming,
     get,
+    list,
     getParts,
     getPartsByType,
     hasTextContent,
@@ -672,7 +828,10 @@ export function useMessages() {
     getUsage,
     getStatus,
     getError,
+    isDisplayable,
     getDiffs,
+    getSessionDiffs,
+    getLatestAssistantMessageId,
     getModelPath,
     getProviderId,
     getModelId,
@@ -683,6 +842,7 @@ export function useMessages() {
     getFinalAnswer,
     updateMessage,
     updatePart,
+    addPendingUserMessage,
     loadHistory,
     loadHistoryIncrementally,
     removeMessage,

@@ -31,6 +31,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   "select-session": [sessionId: string];
+  "delete-session": [sessionId: string];
   "new-session": [];
   "open-file": [path: string];
 }>();
@@ -60,6 +61,7 @@ const emit = defineEmits<{
           :sessions="sessions"
           :active-session-id="activeSessionId"
           @select="emit('select-session', $event)"
+          @delete="emit('delete-session', $event)"
         />
       </template>
       <template v-else>

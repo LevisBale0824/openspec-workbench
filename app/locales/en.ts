@@ -13,6 +13,7 @@ export default {
     files: "Files",
     noSessions: "No sessions yet",
     newSession: "New Session",
+    deleteSession: "Delete session",
     justNow: "now",
   },
   welcome: {

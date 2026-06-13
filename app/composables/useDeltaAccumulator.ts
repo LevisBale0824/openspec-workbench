@@ -29,7 +29,7 @@ const messages = new Map<string, AccumulatedMessage>();
 function isComplete(info: MessageInfo): boolean {
   if (info.role !== "assistant") return true;
   if (info.error) return true;
-  if (info.time.completed !== undefined) return true;
+  if (info.time?.completed !== undefined) return true;
   if (info.finish) return true;
   return false;
 }

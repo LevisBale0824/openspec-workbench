@@ -1,16 +1,12 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useBackend } from "../composables/useBackend";
 
 const { t } = useI18n();
+const backend = useBackend();
 
 const inputText = ref("");
-const isSending = ref(false);
-
-const emit = defineEmits<{
-  send: [text: string];
-  abort: [];
-}>();
 
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -19,11 +15,15 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-function handleSend() {
+async function handleSend() {
   const text = inputText.value.trim();
-  if (!text || isSending.value) return;
-  emit("send", text);
+  if (!text || backend.isSending.value) return;
   inputText.value = "";
+  await backend.sendPrompt(text);
+}
+
+function handleAbort() {
+  backend.abortSession();
 }
 </script>
 
@@ -33,13 +33,13 @@ function handleSend() {
       <textarea
         v-model="inputText"
         :placeholder="t('chat.placeholder')"
-        :disabled="isSending"
+        :disabled="backend.isSending.value"
         rows="1"
         class="flex-1 resize-none rounded-lg bg-surface-800 border border-surface-700 px-3 py-2 text-sm text-surface-100 placeholder:text-surface-600 focus:outline-none focus:border-accent-cyan/50 transition-colors"
         @keydown="handleKeydown"
       />
       <button
-        v-if="!isSending"
+        v-if="!backend.isSending.value"
         :disabled="!inputText.trim()"
         class="px-3 py-2 text-sm font-medium rounded-lg bg-accent-cyan/15 text-accent-cyan hover:bg-accent-cyan/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         @click="handleSend"
@@ -51,7 +51,7 @@ function handleSend() {
       <button
         v-else
         class="px-3 py-2 text-sm font-medium rounded-lg bg-accent-rose/15 text-accent-rose hover:bg-accent-rose/25 transition-colors"
-        @click="$emit('abort')"
+        @click="handleAbort"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

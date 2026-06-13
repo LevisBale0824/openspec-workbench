@@ -45,7 +45,7 @@ function buildQuery(params?: Record<string, QueryValue>) {
   if (!params) return "";
   const sp = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value === undefined) continue;
+    if (value === undefined || value === "") continue;
     sp.set(key, String(value));
   }
   const q = sp.toString();
@@ -548,19 +548,22 @@ export async function sendPromptAsync(
   payload: {
     directory: string;
     agent: string;
-    model: { providerID?: string; modelID: string };
+    model?: { providerID?: string; modelID: string };
     variant?: string;
     parts: Array<Record<string, unknown>>;
   },
 ) {
+  const body: Record<string, unknown> = {
+    agent: payload.agent,
+    variant: payload.variant,
+    parts: payload.parts,
+  };
+  if (payload.model) {
+    body.model = { ...payload.model, variant: payload.variant };
+  }
   await sendJson(`/session/${sessionId}/prompt_async`, "POST", {
     params: { directory: payload.directory },
-    body: {
-      agent: payload.agent,
-      model: { ...payload.model, variant: payload.variant },
-      variant: payload.variant,
-      parts: payload.parts,
-    },
+    body,
   });
 }
 

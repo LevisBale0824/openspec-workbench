@@ -279,7 +279,7 @@ export type BackendAdapter = {
     payload: {
       directory: string;
       agent: string;
-      model: { providerID?: string; modelID: string };
+      model?: { providerID?: string; modelID: string };
       variant?: string;
       parts: Array<Record<string, unknown>>;
     },

@@ -3,18 +3,36 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "dist-electron/main.js",
   "packageManager": "pnpm@10.29.3",
   "scripts": {
     "dev": "vite",
+    "electron:dev": "ELECTRON=true vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "vue-tsc --noEmit",
-    "electron:start": "node scripts/electron-start.mjs",
-    "electron:build": "vite build && electron-builder",
+    "electron:build": "vue-tsc --noEmit && vite build && electron-builder",
     "bridge:build": "tsc -p cli-bridge/tsconfig.json",
     "bridge:start": "node cli-bridge/dist/server.js"
+  },
+  "build": {
+    "appId": "com.openspec.workbench",
+    "productName": "OpenSpec Workbench",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   },
   "dependencies": {
     "@iconify/vue": "^5.0.1",
@@ -29,12 +47,16 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.2.3",
     "@vitejs/plugin-vue": "^6.0.4",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.3",
     "happy-dom": "^17.0.0",
     "markdown-it": "^14.2.0",
     "shiki": "^4.2.0",
     "tailwindcss": "^4.1.18",
     "typescript": "^6.0.3",
     "vite": "^7.3.1",
+    "vite-plugin-electron": "^1.0.4",
+    "vite-plugin-electron-renderer": "^1.0.0",
     "vitest": "^4.1.2",
     "vue-tsc": "^3.2.4"
   }

@@ -16,11 +16,18 @@ function newSession() {
 }
 
 async function pickFolder() {
+  // Try Electron native dialog first (returns absolute path)
+  const nativeResult = await project.openDirectoryNative();
+  if (nativeResult) {
+    router.push({ name: "chat" });
+    return;
+  }
   // Try File System Access API (Chrome/Edge)
   if ("showDirectoryPicker" in window) {
     try {
-      const handle = await (window as any).showDirectoryPicker({ mode: "read" });
-      await project.openDirectoryHandle(handle);
+    const handle = await window.showDirectoryPicker?.({ mode: "read" });
+    if (!handle) throw new Error("No directory selected");
+    await project.openDirectoryHandle(handle);
       router.push({ name: "chat" });
       return;
     } catch {
