@@ -3,7 +3,11 @@ import { createRouter, createWebHashHistory } from "vue-router";
 import { i18n } from "./i18n";
 import App from "./App.vue";
 import { routes } from "./router";
+import { initTheme } from "./composables/useTheme";
 import "./styles/tailwind.css";
+
+// Apply persisted theme before mount to avoid the default-theme flash.
+initTheme();
 
 const router = createRouter({
   history: createWebHashHistory(),

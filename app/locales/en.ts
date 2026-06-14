@@ -49,6 +49,9 @@ export default {
     enableWorkflow: "Enable 4-step workflow",
     restartAgent: "Restart Agent",
     restarting: "Restarting...",
+    theme: "Theme",
+    tabBackend: "Backend",
+    tabAppearance: "Appearance",
   },
   workflow: {
     explore: "Explore",

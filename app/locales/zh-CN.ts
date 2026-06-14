@@ -49,6 +49,9 @@ export default {
     enableWorkflow: "启用四步工作流",
     restartAgent: "重启 Agent",
     restarting: "重启中...",
+    theme: "主题",
+    tabBackend: "后端",
+    tabAppearance: "外观",
   },
   workflow: {
     explore: "需求探索",
