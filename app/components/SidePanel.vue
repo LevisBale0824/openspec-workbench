@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import SessionTree from "./SessionTree.vue";
 import FileTree from "./FileTree.vue";
@@ -34,24 +34,17 @@ const props = withDefaults(
 // only its header height.
 
 type SectionId = "sessions" | "files" | "diff" | "openspec";
+// All sections start collapsed — the user opts in to each one.
 const collapsed = ref<Record<SectionId, boolean>>({
-  sessions: false,
-  files: false,
-  diff: false,
-  openspec: false,
+  sessions: true,
+  files: true,
+  diff: true,
+  openspec: true,
 });
 
 function toggleSection(id: SectionId) {
   collapsed.value[id] = !collapsed.value[id];
 }
-
-// Auto-expand files section when a project is opened.
-watch(
-  () => projectState.directoryName,
-  (name) => {
-    if (name) collapsed.value.files = false;
-  },
-);
 
 const emit = defineEmits<{
   "select-session": [sessionId: string];

@@ -802,9 +802,7 @@ async function runOpenspecValidate(
   };
 }
 
-function parseValidationOutput(
-  raw: string,
-): Array<{
+function parseValidationOutput(raw: string): Array<{
   file: string;
   line?: number;
   message: string;
@@ -1165,6 +1163,26 @@ function registerIpcHandlers() {
       return { ok: false, reason: String(err) };
     }
   });
+
+  // ── Window controls (frameless titlebar) ──────────────────────────────
+  ipcMain.handle("window:minimize", () => {
+    mainWindow?.minimize();
+  });
+  ipcMain.handle("window:toggleMaximize", () => {
+    if (!mainWindow) return false;
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+      return false;
+    }
+    mainWindow.maximize();
+    return true;
+  });
+  ipcMain.handle("window:close", () => {
+    mainWindow?.close();
+  });
+  ipcMain.handle("window:isMaximized", () => {
+    return mainWindow?.isMaximized() ?? false;
+  });
 }
 
 // ── Application menu ──────────────────────────────────────────────────────
@@ -1255,6 +1273,12 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: "SpecForge",
+    // Frameless window with custom titlebar. On macOS keep the traffic-light
+    // buttons (titleBarStyle: "hidden") for native familiarity; on Win/Linux
+    // go fully frameless and paint our own window controls.
+    frame: process.platform === "darwin",
+    titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
+    trafficLightPosition: { x: 10, y: 10 },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -1262,9 +1286,19 @@ function createWindow() {
     },
   });
 
+  // Notify renderer when maximize state changes so the titlebar can swap its
+  // maximize/restore icon. macOS uses native traffic lights — no toggle needed.
+  const emitMaximizeChange = () => {
+    mainWindow?.webContents.send("window:maximizeChange", mainWindow.isMaximized());
+  };
+  mainWindow.on("maximize", emitMaximizeChange);
+  mainWindow.on("unmaximize", emitMaximizeChange);
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools();
+    // Detach into a standalone window so DevTools doesn't get clipped by the
+    // frameless main window and F12 remains accessible.
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }

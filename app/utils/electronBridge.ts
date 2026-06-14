@@ -142,3 +142,27 @@ export async function initOpenSpec(
   }
   return null;
 }
+
+// ── Frameless titlebar window controls ────────────────────────────────────
+
+export function windowMinimize(): void {
+  void window.electronAPI?.windowMinimize();
+}
+
+export function windowToggleMaximize(): void {
+  void window.electronAPI?.windowToggleMaximize();
+}
+
+export function windowClose(): void {
+  void window.electronAPI?.windowClose();
+}
+
+export async function windowIsMaximized(): Promise<boolean> {
+  if (!window.electronAPI) return false;
+  return window.electronAPI.windowIsMaximized();
+}
+
+export function onWindowMaximizeChange(callback: (isMaximized: boolean) => void): () => void {
+  if (!window.electronAPI) return () => {};
+  return window.electronAPI.onWindowMaximizeChange(callback);
+}

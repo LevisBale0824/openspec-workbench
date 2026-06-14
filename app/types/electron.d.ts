@@ -67,6 +67,12 @@ export interface ElectronAPI {
   initOpenSpec: (
     rootPath: string,
   ) => Promise<{ ok: boolean; method?: "cli" | "manual"; reason?: string }>;
+  /** 无边框标题栏:窗口控制 + 最大化状态变化事件 */
+  windowMinimize: () => Promise<void>;
+  windowToggleMaximize: () => Promise<boolean>;
+  windowClose: () => Promise<void>;
+  windowIsMaximized: () => Promise<boolean>;
+  onWindowMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void;
   onOpenFolder: (callback: (path: string) => void) => () => void;
   isElectron: true;
 }

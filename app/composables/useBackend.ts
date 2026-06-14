@@ -389,12 +389,12 @@ export function useBackend() {
    *
    * Does NOT auto-connect — caller should invoke `reconnect()` after switch.
    */
-  async function switchBackend(kind: BackendKind): Promise<void> {
-    if (kind === activeBackendKind.value) return;
-    activeBackendKind.value = kind;
-    setActiveBackendKind(kind);
-
-    // Load persisted URL/auth for the new kind into the shared opencode client.
+  /**
+   * Apply persisted URL/auth for a backend kind into the shared client state.
+   * Factored out so switchBackend can reuse it when rolling back after a
+   * failed switch.
+   */
+  function applyBackendConfig(kind: BackendKind): void {
     const persistedUrl = getPersistedUrlFor(kind);
     baseUrl.value = persistedUrl;
     if (kind === "opencode") {

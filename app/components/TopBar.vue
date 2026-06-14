@@ -1,16 +1,25 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useProject } from "../composables/useProject";
 import { useBackend } from "../composables/useBackend";
-import { isElectron, selectDirectory } from "../utils/electronBridge";
+import {
+  isElectron,
+  onWindowMaximizeChange,
+  selectDirectory,
+  windowClose,
+  windowIsMaximized,
+  windowMinimize,
+  windowToggleMaximize,
+} from "../utils/electronBridge";
 
 const { t } = useI18n();
 const router = useRouter();
 const project = useProject();
 const backend = useBackend();
 const projectState = computed(() => project.state);
+const inElectron = isElectron();
 
 const emit = defineEmits<{
   "toggle-settings": [];
@@ -29,9 +38,24 @@ const agentLabel = computed(() => {
   }
 });
 
+// Track maximize state so the toggle button shows the right glyph
+// (square = currently maximized, will restore on click).
+const isMaximized = ref(false);
+let unsubMaximize: (() => void) | null = null;
+onMounted(async () => {
+  if (!inElectron) return;
+  isMaximized.value = await windowIsMaximized();
+  unsubMaximize = onWindowMaximizeChange((v) => {
+    isMaximized.value = v;
+  });
+});
+onUnmounted(() => {
+  unsubMaximize?.();
+});
+
 async function openFolder() {
   // Browser: go to the Welcome page which has the directory picker UI.
-  if (!isElectron()) {
+  if (!inElectron) {
     router.push({ name: "home" });
     return;
   }
@@ -45,10 +69,10 @@ async function openFolder() {
 
 <template>
   <header
-    class="h-10 flex items-center justify-between px-3 bg-surface-900 border-b border-surface-800 select-none"
+    class="h-10 flex items-center justify-between px-3 bg-surface-900 border-b border-surface-800 select-none titlebar-drag"
   >
     <!-- Left: Logo + Title + Current Project -->
-    <div class="flex items-center gap-2 min-w-0">
+    <div class="flex items-center gap-2 min-w-0 titlebar-nodrag">
       <div
         class="w-5 h-5 rounded-full bg-gradient-to-br from-accent-cyan to-accent-indigo flex-shrink-0"
       />
@@ -78,10 +102,10 @@ async function openFolder() {
       </template>
     </div>
 
-    <!-- Right: Actions -->
+    <!-- Right: Agent label + Settings + Window controls -->
     <div class="flex items-center gap-1 flex-shrink-0">
       <button
-        class="px-2 py-1 text-xs text-surface-300 hover:text-accent-cyan hover:bg-surface-800 rounded transition-colors flex items-center gap-1"
+        class="px-2 py-1 text-xs text-surface-300 hover:text-accent-cyan hover:bg-surface-800 rounded transition-colors flex items-center gap-1 titlebar-nodrag"
         :title="t('topbar.agentLabel')"
         @click="emit('toggle-settings')"
       >
@@ -89,7 +113,7 @@ async function openFolder() {
         <span>{{ agentLabel }}</span>
       </button>
       <button
-        class="px-2 py-1 text-xs text-surface-400 hover:text-surface-200 hover:bg-surface-800 rounded transition-colors"
+        class="px-2 py-1 text-xs text-surface-400 hover:text-surface-200 hover:bg-surface-800 rounded transition-colors titlebar-nodrag"
         @click="emit('toggle-settings')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,6 +131,76 @@ async function openFolder() {
           />
         </svg>
       </button>
+
+      <!-- Window controls (frameless mode only) -->
+      <template v-if="inElectron">
+        <span class="mx-1 w-px h-4 bg-surface-800" />
+        <button
+          class="w-8 h-7 flex items-center justify-center text-surface-400 hover:text-surface-100 hover:bg-surface-800 rounded transition-colors titlebar-nodrag"
+          title="Minimize"
+          @click="windowMinimize"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <rect x="2" y="5.5" width="8" height="1" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          class="w-8 h-7 flex items-center justify-center text-surface-400 hover:text-surface-100 hover:bg-surface-800 rounded transition-colors titlebar-nodrag"
+          :title="isMaximized ? 'Restore' : 'Maximize'"
+          @click="windowToggleMaximize"
+        >
+          <svg v-if="isMaximized" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <rect
+              x="2.5"
+              y="4"
+              width="5"
+              height="5"
+              stroke="currentColor"
+              stroke-width="1"
+              fill="none"
+            />
+            <path d="M4 4 V2.5 H9 V7.5 H7.5" stroke="currentColor" stroke-width="1" fill="none" />
+          </svg>
+          <svg v-else width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <rect
+              x="2.5"
+              y="2.5"
+              width="7"
+              height="7"
+              stroke="currentColor"
+              stroke-width="1"
+              fill="none"
+            />
+          </svg>
+        </button>
+        <button
+          class="w-8 h-7 flex items-center justify-center text-surface-400 hover:text-surface-100 hover:bg-accent-rose rounded transition-colors titlebar-nodrag"
+          title="Close"
+          @click="windowClose"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path
+              d="M3 3 L9 9 M9 3 L3 9"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+      </template>
     </div>
   </header>
 </template>
+
+<style scoped>
+/* Frameless-window drag region. The whole header is draggable; interactive
+   children opt out via .titlebar-nodrag. -webkit-app-region is inherited
+   so applying no-drag on a wrapper covers nested buttons too. */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-nodrag {
+  -webkit-app-region: no-drag;
+}
+</style>

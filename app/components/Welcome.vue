@@ -106,8 +106,52 @@ function submitManualPath() {
             ]"
             @click="chooseAgent(opt.kind)"
           >
-            <div class="text-sm font-medium text-surface-100">{{ t(opt.labelKey) }}</div>
-            <div class="text-[10px] text-surface-500 mt-0.5">{{ t(opt.descKey) }}</div>
+            <div class="flex items-start gap-2">
+              <span
+                class="flex-shrink-0 mt-0.5"
+                :class="opt.kind === 'zero' ? 'text-accent-indigo' : 'text-accent-cyan'"
+              >
+                <!-- OpenCode: angle brackets containing a slash — classic code symbol -->
+                <svg
+                  v-if="opt.kind === 'opencode'"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="8 6 2 12 8 18" />
+                  <polyline points="16 6 22 12 16 18" />
+                  <line x1="14" y1="4" x2="10" y2="20" />
+                </svg>
+                <!-- Zero: same brackets but with a "0" inside, signaling it's a
+                     code-compatible fork (same shape, different core) -->
+                <svg
+                  v-else-if="opt.kind === 'zero'"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="8 6 2 12 8 18" />
+                  <polyline points="16 6 22 12 16 18" />
+                  <ellipse cx="12" cy="12" rx="2.6" ry="4.8" />
+                </svg>
+              </span>
+              <div class="min-w-0">
+                <div class="text-sm font-medium text-surface-100">{{ t(opt.labelKey) }}</div>
+                <div class="text-[10px] text-surface-500 mt-0.5">{{ t(opt.descKey) }}</div>
+              </div>
+            </div>
           </button>
         </div>
       </div>

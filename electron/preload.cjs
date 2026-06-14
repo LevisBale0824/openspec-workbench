@@ -17,6 +17,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   runOpenSpecValidate: (rootPath, changeId) =>
     ipcRenderer.invoke("runOpenSpecValidate", rootPath, changeId),
   initOpenSpec: (rootPath) => ipcRenderer.invoke("initOpenSpec", rootPath),
+  windowMinimize: () => ipcRenderer.invoke("window:minimize"),
+  windowToggleMaximize: () => ipcRenderer.invoke("window:toggleMaximize"),
+  windowClose: () => ipcRenderer.invoke("window:close"),
+  windowIsMaximized: () => ipcRenderer.invoke("window:isMaximized"),
+  onWindowMaximizeChange: (callback) => {
+    const handler = (_event, isMaximized) => callback(isMaximized);
+    ipcRenderer.on("window:maximizeChange", handler);
+    return () => ipcRenderer.removeListener("window:maximizeChange", handler);
+  },
   onOpenFolder: (callback) => {
     const handler = (_event, path) => callback(path);
     ipcRenderer.on("menu:openFolder", handler);
