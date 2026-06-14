@@ -285,7 +285,7 @@ const activeTab = ref<SettingsTab>("backend");
                   {{
                     backend.connectionState.value === "ready"
                       ? t("chat.abort")
-                      : t("settings.backend")
+                      : t("settings.connect")
                   }}
                 </button>
               </div>

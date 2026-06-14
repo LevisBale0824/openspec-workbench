@@ -52,6 +52,7 @@ export default {
     theme: "主题",
     tabBackend: "后端",
     tabAppearance: "外观",
+    connect: "连接",
   },
   workflow: {
     explore: "需求探索",

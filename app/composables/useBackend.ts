@@ -293,6 +293,13 @@ watch(
 // ── Electron: auto-connect when project directory is set ──────────────────
 
 if (electronMode) {
+  // The main process starts the agent server in app.whenReady() before the
+  // window is created, so by the time this module initializes the server is
+  // already listening. Connect immediately rather than waiting for the user
+  // to open a project — this makes the sidebar status accurate on launch and
+  // avoids a confusing "disconnected" state on a healthy backend.
+  activation.startInitialization();
+
   watch(
     () => project.state.directoryPath,
     (path) => {
@@ -467,8 +474,8 @@ export function useBackend() {
 
     // Clear session/message state. The previous agent's session IDs and
     // messages belong to that agent's daemon; mixing them with the new agent
-    // would show stale or invalid data. Caller is expected to trigger a
-    // reconnect (which re-creates a session under the new agent) afterwards.
+    // would show stale or invalid data. switchBackend auto-reconnects after
+    // both successful switch and successful rollback.
     if (selectedSessionId.value) {
       msgStore.saveSessionState(selectedSessionId.value);
     }
@@ -488,6 +495,8 @@ export function useBackend() {
         if (!result || !result.status.running) {
           throw new Error(i18n.global.t("status.serverDown"));
         }
+        // Server is up — reconnect SSE/REST to the new backend.
+        void activation.reconnect();
       } catch (e) {
         console.warn(`[useBackend] switch to ${kind} failed, rolling back:`, e);
         activeBackendKind.value = previousKind;
@@ -507,10 +516,15 @@ export function useBackend() {
             rollbackOk = false;
           }
         }
-        // Only surface the original failure if rollback ALSO failed to restore
-        // a working server. If rollback succeeded the UI is already back on a
-        // healthy backend, so showing "zero failed" would be misleading noise.
-        if (!rollbackOk) {
+        if (rollbackOk) {
+          // Previous server restored — reconnect to it so the UI reflects the
+          // recovered state instead of staying "disconnected".
+          void activation.reconnect();
+        } else {
+          // Only surface the original failure if rollback ALSO failed to
+          // restore a working server. If rollback succeeded the UI is already
+          // back on a healthy backend, so showing "zero failed" would be
+          // misleading noise.
           activation.errorMessage.value = i18n.global.t("status.startFailed", {
             agent: kind,
             reason: toErrorMessage(e),

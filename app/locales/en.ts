@@ -52,6 +52,7 @@ export default {
     theme: "Theme",
     tabBackend: "Backend",
     tabAppearance: "Appearance",
+    connect: "Connect",
   },
   workflow: {
     explore: "Explore",
