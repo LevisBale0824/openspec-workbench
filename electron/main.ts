@@ -856,38 +856,11 @@ const DEFAULT_AGENT_CONFIG: AgentConfig = {
   zeroPort: 13286,
 };
 
+// Agent kind is intentionally NOT persisted across launches. Boot always starts
+// opencode (the safe default). If the user previously switched to an agent
+// whose CLI isn't installed, persisting that choice would brick every
+// subsequent launch. Switching during a session updates this in-memory value.
 let agentConfig: AgentConfig = { ...DEFAULT_AGENT_CONFIG };
-
-function agentConfigPath(): string {
-  return path.join(app.getPath("userData"), "agent-config.json");
-}
-
-function loadAgentConfig(): AgentConfig {
-  try {
-    const raw = fs.readFileSync(agentConfigPath(), "utf-8");
-    const parsed = JSON.parse(raw) as Partial<AgentConfig>;
-    return {
-      kind: parsed.kind === "zero" ? "zero" : "opencode",
-      opencodePort:
-        typeof parsed.opencodePort === "number"
-          ? parsed.opencodePort
-          : DEFAULT_AGENT_CONFIG.opencodePort,
-      zeroPort:
-        typeof parsed.zeroPort === "number" ? parsed.zeroPort : DEFAULT_AGENT_CONFIG.zeroPort,
-    };
-  } catch {
-    return { ...DEFAULT_AGENT_CONFIG };
-  }
-}
-
-function saveAgentConfig(config: AgentConfig): void {
-  try {
-    fs.writeFileSync(agentConfigPath(), JSON.stringify(config, null, 2), "utf-8");
-    agentConfig = config;
-  } catch (err) {
-    console.error("[electron] saveAgentConfig failed:", err);
-  }
-}
 
 let serverProcess: ChildProcess | null = null;
 let serverStatus: { running: boolean; port: number; pid: number } = {
@@ -1125,17 +1098,25 @@ function registerIpcHandlers() {
     return agentConfig;
   });
 
-  // Switch active agent: persist config, restart the spawned CLI with the new
+  // Switch active agent: update in-memory config (NOT persisted — see
+  // DEFAULT_AGENT_CONFIG comment), restart the spawned CLI with the new
   // kind/port, and return updated server status. The renderer is responsible
   // for re-connecting its SSE/REST client afterwards.
+  //
+  // IMPORTANT: when the renderer sends kind: "opencode" we must accept it as
+  // "opencode", not fall back to the current agentConfig.kind. The previous
+  // logic (`next.kind === "zero" ? "zero" : agentConfig.kind`) silently kept
+  // the old kind when the user clicked the opencode button, so rollback after
+  // a failed zero-switch and the Restart button both failed to bring opencode
+  // back up.
   ipcMain.handle("setAgentConfig", async (_e, next: Partial<AgentConfig>) => {
     const merged: AgentConfig = {
-      kind: next.kind === "zero" ? "zero" : agentConfig.kind,
+      kind: next.kind === "zero" ? "zero" : "opencode",
       opencodePort:
         typeof next.opencodePort === "number" ? next.opencodePort : agentConfig.opencodePort,
       zeroPort: typeof next.zeroPort === "number" ? next.zeroPort : agentConfig.zeroPort,
     };
-    saveAgentConfig(merged);
+    agentConfig = merged;
     await restartServer();
     return { config: agentConfig, status: serverStatus };
   });
@@ -1396,7 +1377,6 @@ function createWindow() {
 // ── App lifecycle ──────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  agentConfig = loadAgentConfig();
   registerIpcHandlers();
   registerMenu();
   await startServer();

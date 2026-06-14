@@ -9,7 +9,7 @@
 import { createOpenCodeAdapter } from "./openCodeAdapter";
 import { createZeroAdapter } from "./zeroAdapter";
 import type { BackendAdapter, BackendKind } from "./types";
-import { StorageKeys, storageGet, storageSet } from "../utils/storageKeys";
+import { StorageKeys, storageGet } from "../utils/storageKeys";
 
 // ── Default URLs ──────────────────────────────────────────────────────────
 
@@ -21,8 +21,12 @@ const DEFAULT_CLI_BRIDGE_URL = "http://localhost:13285";
 
 let adapters: Partial<Record<BackendKind, BackendAdapter>> = {};
 
-let activeBackendKind: BackendKind =
-  (storageGet(StorageKeys.auth.activeBackend) as BackendKind) ?? "opencode";
+// Active backend kind is intentionally NOT persisted across launches. Every
+// app boot starts as "opencode" (the safe default — matches the main process
+// spawn). If the user previously switched to an agent whose CLI isn't
+// installed, persisting that choice would brick every subsequent launch.
+// Switching during a session updates this in-memory value only.
+let activeBackendKind: BackendKind = "opencode";
 
 const listeners = new Set<(kind: BackendKind) => void>();
 
@@ -37,7 +41,6 @@ export function setActiveBackendKind(kind: BackendKind) {
     throw new Error(`Backend adapter is not registered: ${kind}`);
   }
   activeBackendKind = kind;
-  storageSet(StorageKeys.auth.activeBackend, kind);
   for (const listener of listeners) listener(kind);
 }
 

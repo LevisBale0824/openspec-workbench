@@ -480,23 +480,31 @@ export function useBackend() {
         }
       } catch (e) {
         console.warn(`[useBackend] switch to ${kind} failed, rolling back:`, e);
-        activation.errorMessage.value = i18n.global.t("status.startFailed", {
-          agent: kind,
-          reason: toErrorMessage(e),
-        });
         activeBackendKind.value = previousKind;
         setActiveBackendKind(previousKind);
         applyBackendConfig(previousKind);
         // Restore the previous backend's server process — it was stopped when
         // we attempted to start the new one. Only opencode/zero have a main-
         // process-managed lifecycle; cli-bridge runs externally.
+        let rollbackOk = true;
         if (previousKind === "opencode" || previousKind === "zero") {
           try {
             const { restartAgent } = await import("../utils/electronBridge");
-            await restartAgent(previousKind);
+            const result = await restartAgent(previousKind);
+            if (!result || !result.status.running) rollbackOk = false;
           } catch {
             // best-effort; previous state may have been a misconfigured backend too
+            rollbackOk = false;
           }
+        }
+        // Only surface the original failure if rollback ALSO failed to restore
+        // a working server. If rollback succeeded the UI is already back on a
+        // healthy backend, so showing "zero failed" would be misleading noise.
+        if (!rollbackOk) {
+          activation.errorMessage.value = i18n.global.t("status.startFailed", {
+            agent: kind,
+            reason: toErrorMessage(e),
+          });
         }
       }
     }
