@@ -86,6 +86,18 @@ function applyAuth() {
 
 // ── Connection ────────────────────────────────────────────────────────
 
+const restarting = ref(false);
+
+async function restartAgent() {
+  if (restarting.value) return;
+  restarting.value = true;
+  try {
+    await backend.restartCurrentAgent();
+  } finally {
+    restarting.value = false;
+  }
+}
+
 const statusColor: Record<string, string> = {
   disconnected: "bg-surface-600",
   connecting: "bg-accent-amber animate-pulse",
@@ -152,7 +164,7 @@ function close() {
               :class="statusColor[backend.connectionState.value] ?? 'bg-surface-600'"
             />
             <span
-              class="text-sm"
+              class="text-sm flex-1"
               :class="
                 backend.connectionState.value === 'ready'
                   ? 'text-accent-emerald'
@@ -161,6 +173,30 @@ function close() {
             >
               {{ t(statusText[backend.connectionState.value] ?? "status.disconnected") }}
             </span>
+            <button
+              v-if="backend.isElectron"
+              type="button"
+              :disabled="restarting"
+              :title="t('settings.restartAgent')"
+              class="px-2 py-1 text-xs rounded bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-accent-cyan transition-colors disabled:opacity-40 disabled:cursor-wait flex items-center gap-1"
+              @click="restartAgent"
+            >
+              <svg
+                class="w-3 h-3"
+                :class="restarting ? 'animate-spin' : ''"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2.5"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span>{{ restarting ? t("settings.restarting") : t("settings.restartAgent") }}</span>
+            </button>
           </div>
           <p v-if="backend.errorMessage.value" class="text-xs text-accent-rose mt-1">
             {{ backend.errorMessage.value }}

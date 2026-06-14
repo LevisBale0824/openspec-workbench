@@ -19,13 +19,13 @@ import { isElectron as detectElectron, readWorkspaceDiff } from "../utils/electr
 import {
   getActiveBackendKind,
   getActiveBackendAdapter,
-  getPersistedOpenCodeUrl,
   getPersistedUrlFor,
   configureOpenCodeBackend,
   configureZeroBackend,
   setActiveBackendKind,
 } from "../backends/registry";
 import { StorageKeys, storageGet, storageSet } from "../utils/storageKeys";
+import { i18n } from "../i18n";
 import type { BackendKind } from "../backends/types";
 import type {
   FileDiff,
@@ -39,11 +39,20 @@ export type { ConnectionState } from "./useBackendActivation";
 // ── Module-level singleton state ──────────────────────────────────────────
 
 const electronMode = detectElectron();
-const DEFAULT_URL = "http://localhost:13284";
 
-const baseUrl = ref(electronMode ? DEFAULT_URL : getPersistedOpenCodeUrl());
-const authHeader = ref(storageGet(StorageKeys.auth.opencodeAuthorization) ?? undefined);
-const activeBackendKind = ref<BackendKind>(getActiveBackendKind());
+// Initialise baseUrl + authHeader from the *persisted active kind* so they
+// match the adapter that `getActiveBackendAdapter()` will return. Previously
+// this hardcoded opencode's URL/auth, which left the SSE client pointed at
+// :13284 even when the user had last selected zero (:13286) — manifesting as
+// silent connection failures and stray TIME_WAIT sockets on the wrong port.
+const initialBackendKind = getActiveBackendKind();
+const baseUrl = ref(getPersistedUrlFor(initialBackendKind));
+const authHeader = ref(
+  initialBackendKind === "zero"
+    ? (storageGet(StorageKeys.auth.zeroAuthorization) ?? undefined)
+    : (storageGet(StorageKeys.auth.opencodeAuthorization) ?? undefined),
+);
+const activeBackendKind = ref<BackendKind>(initialBackendKind);
 
 // Shared refs consumed by multiple sub-composables
 const selectedSessionId = ref("");
@@ -406,6 +415,55 @@ export function useBackend() {
       authHeader.value = persistedAuth;
       configureZeroBackend({ baseUrl: persistedUrl, authorization: persistedAuth });
     }
+  }
+
+  /**
+   * Restart the current agent's server (Electron only). Used to recover from
+   * an externally-killed daemon (e.g. user killed opencode.exe in Task Manager).
+   * Calls the main process's setAgentConfig IPC, which calls restartServer()
+   * internally and returns the new server status.
+   *
+   * Unlike switchBackend, this does NOT change the active kind — it just
+   * respawns the same CLI. On failure, writes to errorMessage so the UI can
+   * surface the problem.
+   */
+  async function restartCurrentAgent(): Promise<boolean> {
+    if (!electronMode) return false;
+    const kind = activeBackendKind.value;
+    if (kind !== "opencode" && kind !== "zero") return false;
+
+    activation.errorMessage.value = "";
+    try {
+      const { restartAgent } = await import("../utils/electronBridge");
+      const result = await restartAgent(kind);
+      if (!result || !result.status.running) {
+        activation.errorMessage.value = i18n.global.t("status.startFailed", {
+          agent: kind,
+          reason: i18n.global.t("status.serverDown"),
+        });
+        return false;
+      }
+      // Server is back up — ask activation flow to reconnect SSE/REST.
+      void activation.reconnect();
+      return true;
+    } catch (e) {
+      console.warn(`[useBackend] restart ${kind} failed:`, e);
+      activation.errorMessage.value = i18n.global.t("status.startFailed", {
+        agent: kind,
+        reason: toErrorMessage(e),
+      });
+      return false;
+    }
+  }
+
+  async function switchBackend(kind: BackendKind): Promise<void> {
+    if (kind === activeBackendKind.value) return;
+    const previousKind = activeBackendKind.value;
+
+    activeBackendKind.value = kind;
+    setActiveBackendKind(kind);
+    applyBackendConfig(kind);
+    activation.errorMessage.value = "";
 
     // In Electron, ask main process to restart the CLI with the new kind.
     // cli-bridge runs as a separate process (not spawned by main), so we only
@@ -413,9 +471,33 @@ export function useBackend() {
     if (kind === "opencode" || kind === "zero") {
       try {
         const { restartAgent } = await import("../utils/electronBridge");
-        await restartAgent(kind);
-      } catch {
-        // non-electron environment — ignore
+        const result = await restartAgent(kind);
+        // If the main process reports the server didn't come up (e.g. CLI
+        // binary missing), roll back to the previous kind so the user is
+        // not stuck on a dead backend.
+        if (!result || !result.status.running) {
+          throw new Error(i18n.global.t("status.serverDown"));
+        }
+      } catch (e) {
+        console.warn(`[useBackend] switch to ${kind} failed, rolling back:`, e);
+        activation.errorMessage.value = i18n.global.t("status.startFailed", {
+          agent: kind,
+          reason: toErrorMessage(e),
+        });
+        activeBackendKind.value = previousKind;
+        setActiveBackendKind(previousKind);
+        applyBackendConfig(previousKind);
+        // Restore the previous backend's server process — it was stopped when
+        // we attempted to start the new one. Only opencode/zero have a main-
+        // process-managed lifecycle; cli-bridge runs externally.
+        if (previousKind === "opencode" || previousKind === "zero") {
+          try {
+            const { restartAgent } = await import("../utils/electronBridge");
+            await restartAgent(previousKind);
+          } catch {
+            // best-effort; previous state may have been a misconfigured backend too
+          }
+        }
       }
     }
   }
@@ -471,6 +553,7 @@ export function useBackend() {
     setAuthHeader,
     setActiveDirectory,
     switchBackend,
+    restartCurrentAgent,
 
     // Session
     createSession: sessionLifecycle.createSession,

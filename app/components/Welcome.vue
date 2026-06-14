@@ -154,6 +154,11 @@ function submitManualPath() {
             </div>
           </button>
         </div>
+
+        <!-- Agent switch error -->
+        <p v-if="backend.errorMessage.value" class="text-xs text-accent-rose mt-2 text-left">
+          {{ backend.errorMessage.value }}
+        </p>
       </div>
 
       <!-- Actions -->

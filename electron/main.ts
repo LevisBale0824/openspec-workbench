@@ -898,6 +898,44 @@ let serverStatus: { running: boolean; port: number; pid: number } = {
 
 async function healthCheck(port: number, timeoutMs = 15000): Promise<boolean> {
   const start = Date.now();
+  // Auto-respawn state. Each spawned ChildProcess is tracked in
+  // `intentionallyKilled` when stopServer() deliberately terminates it; the
+  // exit handler consults this set rather than a module-level boolean so it
+  // survives the race where stopServer→startServer resets state before the
+  // old proc's exit event fires. `consecutiveFailures` drives exponential
+  // backoff and eventually gives up (so a missing CLI doesn't burn CPU forever).
+  const intentionallyKilled = new WeakSet<ChildProcess>();
+  let respawnTimer: ReturnType<typeof setTimeout> | null = null;
+  let consecutiveFailures = 0;
+  const MAX_RESPAWN_ATTEMPTS = 10;
+  const MAX_RESPAWN_BACKOFF_MS = 30_000;
+
+  function clearRespawnTimer(): void {
+    if (respawnTimer) {
+      clearTimeout(respawnTimer);
+      respawnTimer = null;
+    }
+  }
+
+  function scheduleRespawn(kind: string, reason: string): void {
+    if (consecutiveFailures >= MAX_RESPAWN_ATTEMPTS) {
+      console.error(
+        `[electron] giving up respawn for ${kind} after ${MAX_RESPAWN_ATTEMPTS} consecutive failures (last reason: ${reason})`,
+      );
+      return;
+    }
+    consecutiveFailures += 1;
+    const backoff = Math.min(1000 * 2 ** (consecutiveFailures - 1), MAX_RESPAWN_BACKOFF_MS);
+    console.warn(
+      `[electron] ${kind} died (${reason}), respawning in ${backoff}ms (attempt ${consecutiveFailures}/${MAX_RESPAWN_ATTEMPTS})`,
+    );
+    clearRespawnTimer();
+    respawnTimer = setTimeout(() => {
+      respawnTimer = null;
+      void startServer();
+    }, backoff);
+  }
+
   while (Date.now() - start < timeoutMs) {
     try {
       await new Promise<void>((resolve, reject) => {
@@ -924,39 +962,56 @@ async function startServer(): Promise<void> {
   if (serverProcess) return;
 
   const isWin = process.platform === "win32";
+  // Cancel any pending respawn from a previous failure — this is a fresh
+  // attempt (manual restart, agent switch, or initial boot).
+  clearRespawnTimer();
   const kind = agentConfig.kind;
   const port = kind === "zero" ? agentConfig.zeroPort : agentConfig.opencodePort;
   const baseCmd = kind === "zero" ? "zero" : "opencode";
   const cmd = isWin ? `${baseCmd}.cmd` : baseCmd;
 
-  serverProcess = spawn(cmd, ["serve", "--port", String(port)], {
+  const proc = spawn(cmd, ["serve", "--port", String(port)], {
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
     shell: isWin,
   });
 
-  serverProcess.stdout?.on("data", (data: Buffer) => {
+  proc.stdout?.on("data", (data: Buffer) => {
+    serverProcess = proc;
     console.log(`[${kind}]`, data.toString().trim());
   });
 
-  serverProcess.stderr?.on("data", (data: Buffer) => {
+  proc.stderr?.on("data", (data: Buffer) => {
     console.error(`[${kind}]`, data.toString().trim());
   });
 
-  serverProcess.on("error", (err) => {
+  proc.on("error", (err) => {
     console.error(`[electron] Failed to start ${kind}:`, err);
-    serverProcess = null;
-    serverStatus = { running: false, port: 0, pid: 0 };
+    // Only mutate global state if this proc is still current (not replaced).
+    if (serverProcess === proc) {
+      serverProcess = null;
+      serverStatus = { running: false, port: 0, pid: 0 };
+    }
+    if (!intentionallyKilled.has(proc)) {
+      scheduleRespawn(kind, `spawn error: ${err.message}`);
+    }
   });
 
-  serverProcess.on("exit", (code) => {
+  proc.on("exit", (code) => {
     console.log(`[electron] ${kind} exited with code`, code);
-    serverProcess = null;
-    serverStatus = { running: false, port: 0, pid: 0 };
+    if (serverProcess === proc) {
+      serverProcess = null;
+      serverStatus = { running: false, port: 0, pid: 0 };
+    }
+    if (!intentionallyKilled.has(proc)) {
+      scheduleRespawn(kind, `exit code ${code}`);
+    }
+    intentionallyKilled.delete(proc);
   });
 
   const healthy = await healthCheck(port);
   if (healthy) {
+    consecutiveFailures = 0;
     serverStatus = {
       running: true,
       port,
@@ -971,7 +1026,9 @@ async function startServer(): Promise<void> {
 function stopServer(): void {
   if (serverProcess && !serverProcess.killed) {
     serverProcess.kill();
+    clearRespawnTimer();
     serverProcess = null;
+    intentionallyKilled.add(serverProcess);
   }
   serverStatus = { running: false, port: 0, pid: 0 };
 }

@@ -7,6 +7,8 @@ export default {
     disconnected: "未连接",
     connecting: "连接中...",
     error: "连接错误",
+    startFailed: "无法启动 {agent} agent:{reason}",
+    serverDown: "服务器未启动(CLI 未安装或端口被占用?)",
   },
   sidebar: {
     sessions: "会话",
@@ -47,6 +49,8 @@ export default {
     cliBridge: "CLI Bridge",
     workflow: "OpenSpec 工作流",
     enableWorkflow: "启用四步工作流",
+    restartAgent: "重启 Agent",
+    restarting: "重启中...",
   },
   workflow: {
     explore: "需求探索",

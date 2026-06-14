@@ -7,6 +7,8 @@ export default {
     disconnected: "Disconnected",
     connecting: "Connecting...",
     error: "Connection Error",
+    startFailed: "Failed to start {agent} agent: {reason}",
+    serverDown: "server did not come up (CLI missing or port in use?)",
   },
   sidebar: {
     sessions: "Sessions",
@@ -47,6 +49,8 @@ export default {
     cliBridge: "CLI Bridge",
     workflow: "OpenSpec Workflow",
     enableWorkflow: "Enable 4-step workflow",
+    restartAgent: "Restart Agent",
+    restarting: "Restarting...",
   },
   workflow: {
     explore: "Explore",
