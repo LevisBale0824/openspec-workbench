@@ -6,7 +6,7 @@ import {
   Menu,
   type MenuItemConstructorOptions,
 } from "electron";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, execSync, type ChildProcess } from "node:child_process";
 import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -915,6 +915,38 @@ function clearRespawnTimer(): void {
   }
 }
 
+/**
+ * Kill a spawned CLI process and its entire descendant tree.
+ *
+ * Why this exists: on Windows, `spawn(cmd, args, { shell: true })` actually
+ * launches `cmd.exe → opencode.cmd → node.exe`. Calling `proc.kill()` only
+ * terminates the outer cmd.exe wrapper; the actual daemon (node.exe) survives
+ * as an orphan and keeps the port bound, so the next spawn on the same port
+ * fails with EADDRINUSE. `taskkill /F /T /PID` walks the process tree and
+ * kills every descendant.
+ *
+ * On Unix the spawned process is the daemon directly (no shell wrapper), so
+ * `proc.kill()` is sufficient.
+ */
+function killProcessTree(proc: ChildProcess): void {
+  if (!proc.pid) return;
+  if (process.platform === "win32") {
+    try {
+      execSync(`taskkill /F /T /PID ${proc.pid}`, { stdio: "ignore" });
+    } catch (err) {
+      // Most likely the process already exited between the .killed check and
+      // this call. The exit handler has run (or will run) and updated state.
+      console.warn(`[electron] taskkill /T failed for PID ${proc.pid}:`, err);
+    }
+  } else {
+    try {
+      proc.kill("SIGTERM");
+    } catch {
+      // already dead — ignore
+    }
+  }
+}
+
 function scheduleRespawn(kind: string, reason: string): void {
   if (consecutiveFailures >= MAX_RESPAWN_ATTEMPTS) {
     console.error(
@@ -1027,7 +1059,7 @@ function stopServer(): void {
   clearRespawnTimer();
   if (serverProcess && !serverProcess.killed) {
     intentionallyKilled.add(serverProcess);
-    serverProcess.kill();
+    killProcessTree(serverProcess);
     serverProcess = null;
   }
   serverStatus = { running: false, port: 0, pid: 0 };
