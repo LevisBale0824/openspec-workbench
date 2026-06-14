@@ -17,7 +17,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 async function handleSend() {
   const text = inputText.value.trim();
-  if (!text || backend.isSending.value) return;
+  if (!text || backend.isSending.value || backend.isBusy.value) return;
   inputText.value = "";
   await backend.sendPrompt(text);
 }
@@ -33,13 +33,13 @@ function handleAbort() {
       <textarea
         v-model="inputText"
         :placeholder="t('chat.placeholder')"
-        :disabled="backend.isSending.value"
+        :disabled="backend.isSending.value || backend.isBusy.value"
         rows="1"
         class="flex-1 resize-none rounded-lg bg-surface-800 border border-surface-700 px-3 py-2 text-sm text-surface-100 placeholder:text-surface-600 focus:outline-none focus:border-accent-cyan/50 transition-colors"
         @keydown="handleKeydown"
       />
       <button
-        v-if="!backend.isSending.value"
+        v-if="!backend.isBusy.value && !backend.isSending.value"
         :disabled="!inputText.trim()"
         class="px-3 py-2 text-sm font-medium rounded-lg bg-accent-cyan/15 text-accent-cyan hover:bg-accent-cyan/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         @click="handleSend"
