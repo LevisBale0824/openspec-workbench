@@ -73,9 +73,40 @@ async function openFolder() {
   >
     <!-- Left: Logo + Title + Current Project -->
     <div class="flex items-center gap-2 min-w-0 titlebar-nodrag">
-      <div
-        class="w-5 h-5 rounded-full bg-gradient-to-br from-accent-cyan to-accent-indigo flex-shrink-0"
-      />
+      <svg
+        class="w-5 h-5 flex-shrink-0"
+        viewBox="0 0 256 256"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="specforge-mark-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#22d3ee" />
+            <stop offset="33%" stop-color="#6366f1" />
+            <stop offset="66%" stop-color="#10b981" />
+            <stop offset="100%" stop-color="#f59e0b" />
+          </linearGradient>
+        </defs>
+        <circle cx="128" cy="128" r="112" fill="url(#specforge-mark-grad)" />
+        <path
+          d="M96 80 L48 128 L96 176"
+          stroke="white"
+          stroke-width="24"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"
+        />
+        <path
+          d="M160 80 L208 128 L160 176"
+          stroke="white"
+          stroke-width="24"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"
+        />
+        <circle cx="128" cy="128" r="16" fill="white" />
+        <circle cx="128" cy="128" r="8" fill="#0f172a" />
+      </svg>
       <span class="text-sm font-semibold text-surface-200 flex-shrink-0">{{ t("app.title") }}</span>
       <template v-if="projectName">
         <span class="text-surface-600">/</span>
