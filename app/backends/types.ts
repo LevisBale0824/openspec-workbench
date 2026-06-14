@@ -6,7 +6,7 @@
 // Ported from opencode-visualizer-cn/app/backends/types.ts
 // ---------------------------------------------------------------------------
 
-export type BackendKind = "opencode" | "cli-bridge";
+export type BackendKind = "opencode" | "zero" | "cli-bridge";
 
 export type BackendCapabilities = {
   projects: boolean;

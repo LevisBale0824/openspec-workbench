@@ -7,12 +7,14 @@
 // ---------------------------------------------------------------------------
 
 import { createOpenCodeAdapter } from "./openCodeAdapter";
+import { createZeroAdapter } from "./zeroAdapter";
 import type { BackendAdapter, BackendKind } from "./types";
 import { StorageKeys, storageGet, storageSet } from "../utils/storageKeys";
 
 // ── Default URLs ──────────────────────────────────────────────────────────
 
 const DEFAULT_OPENCODE_URL = "http://localhost:13284";
+const DEFAULT_ZERO_URL = "http://localhost:13286";
 const DEFAULT_CLI_BRIDGE_URL = "http://localhost:13285";
 
 // ── Adapter instances ────────────────────────────────────────────────────
@@ -68,12 +70,32 @@ export function configureOpenCodeBackend(options: { baseUrl?: string; authorizat
   getBackendAdapter("opencode").configure?.(options);
 }
 
+export function configureZeroBackend(options: { baseUrl?: string; authorization?: string }) {
+  getBackendAdapter("zero").configure?.(options);
+}
+
 export function getPersistedOpenCodeUrl(): string {
   return storageGet(StorageKeys.auth.opencodeBaseUrl) ?? DEFAULT_OPENCODE_URL;
 }
 
+export function getPersistedZeroUrl(): string {
+  return storageGet(StorageKeys.auth.zeroBaseUrl) ?? DEFAULT_ZERO_URL;
+}
+
 export function getPersistedCliBridgeUrl(): string {
   return storageGet(StorageKeys.auth.cliBridgeUrl) ?? DEFAULT_CLI_BRIDGE_URL;
+}
+
+/** Returns the persisted baseURL for the given backend kind. */
+export function getPersistedUrlFor(kind: BackendKind): string {
+  switch (kind) {
+    case "opencode":
+      return getPersistedOpenCodeUrl();
+    case "zero":
+      return getPersistedZeroUrl();
+    case "cli-bridge":
+      return getPersistedCliBridgeUrl();
+  }
 }
 
 // ── Lazy init ────────────────────────────────────────────────────────────
@@ -88,6 +110,16 @@ function ensureAdapters() {
       authorization: persistedAuth ?? undefined,
     });
     adapters = { ...adapters, opencode: oc };
+  }
+  if (!adapters["zero"]) {
+    const z = createZeroAdapter();
+    const persistedUrl = getPersistedZeroUrl();
+    const persistedAuth = storageGet(StorageKeys.auth.zeroAuthorization);
+    z.configure?.({
+      baseUrl: persistedUrl,
+      authorization: persistedAuth ?? undefined,
+    });
+    adapters = { ...adapters, zero: z };
   }
 }
 

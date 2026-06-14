@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readWorkspaceDiff: (rootPath) => ipcRenderer.invoke("readWorkspaceDiff", rootPath),
   getServerStatus: () => ipcRenderer.invoke("getServerStatus"),
   restartServer: () => ipcRenderer.invoke("restartServer"),
-  // Native menu → renderer. Returns an unsubscribe function.
+  getAgentConfig: () => ipcRenderer.invoke("getAgentConfig"),
+  setAgentConfig: (config) => ipcRenderer.invoke("setAgentConfig", config),
   onOpenFolder: (callback) => {
     const handler = (_event, path) => callback(path);
     ipcRenderer.on("menu:openFolder", handler);

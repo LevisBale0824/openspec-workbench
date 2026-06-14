@@ -20,7 +20,10 @@ import {
   getActiveBackendKind,
   getActiveBackendAdapter,
   getPersistedOpenCodeUrl,
+  getPersistedUrlFor,
   configureOpenCodeBackend,
+  configureZeroBackend,
+  setActiveBackendKind,
 } from "../backends/registry";
 import { StorageKeys, storageGet, storageSet } from "../utils/storageKeys";
 import type { BackendKind } from "../backends/types";
@@ -353,18 +356,65 @@ export function useBackend() {
 
   function setBaseUrl(url: string) {
     baseUrl.value = url;
-    if (activeBackendKind.value === "opencode") {
+    const kind = activeBackendKind.value;
+    if (kind === "opencode") {
       storageSet(StorageKeys.auth.opencodeBaseUrl, url);
       configureOpenCodeBackend({ baseUrl: url });
+    } else if (kind === "zero") {
+      storageSet(StorageKeys.auth.zeroBaseUrl, url);
+      configureZeroBackend({ baseUrl: url });
     }
   }
 
   function setAuthHeader(header: string | undefined) {
     authHeader.value = header;
-    if (activeBackendKind.value === "opencode") {
+    const kind = activeBackendKind.value;
+    if (kind === "opencode") {
       if (header) storageSet(StorageKeys.auth.opencodeAuthorization, header);
       else storageSet(StorageKeys.auth.opencodeAuthorization, "");
       configureOpenCodeBackend({ authorization: header });
+    } else if (kind === "zero") {
+      if (header) storageSet(StorageKeys.auth.zeroAuthorization, header);
+      else storageSet(StorageKeys.auth.zeroAuthorization, "");
+      configureZeroBackend({ authorization: header });
+    }
+  }
+
+  /**
+   * Switch to a different backend kind. Reconfigures the new adapter with its
+   * persisted URL/auth, updates the active ref, and (in Electron mode) asks
+   * the main process to restart the spawned CLI with the new kind/port.
+   *
+   * Does NOT auto-connect — caller should invoke `reconnect()` after switch.
+   */
+  async function switchBackend(kind: BackendKind): Promise<void> {
+    if (kind === activeBackendKind.value) return;
+    activeBackendKind.value = kind;
+    setActiveBackendKind(kind);
+
+    // Load persisted URL/auth for the new kind into the shared opencode client.
+    const persistedUrl = getPersistedUrlFor(kind);
+    baseUrl.value = persistedUrl;
+    if (kind === "opencode") {
+      const persistedAuth = storageGet(StorageKeys.auth.opencodeAuthorization) ?? undefined;
+      authHeader.value = persistedAuth;
+      configureOpenCodeBackend({ baseUrl: persistedUrl, authorization: persistedAuth });
+    } else if (kind === "zero") {
+      const persistedAuth = storageGet(StorageKeys.auth.zeroAuthorization) ?? undefined;
+      authHeader.value = persistedAuth;
+      configureZeroBackend({ baseUrl: persistedUrl, authorization: persistedAuth });
+    }
+
+    // In Electron, ask main process to restart the CLI with the new kind.
+    // cli-bridge runs as a separate process (not spawned by main), so we only
+    // restart for opencode/zero.
+    if (kind === "opencode" || kind === "zero") {
+      try {
+        const { restartAgent } = await import("../utils/electronBridge");
+        await restartAgent(kind);
+      } catch {
+        // non-electron environment — ignore
+      }
     }
   }
 
@@ -418,6 +468,7 @@ export function useBackend() {
     setBaseUrl,
     setAuthHeader,
     setActiveDirectory,
+    switchBackend,
 
     // Session
     createSession: sessionLifecycle.createSession,

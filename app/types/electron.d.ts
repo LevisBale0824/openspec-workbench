@@ -15,20 +15,30 @@ export type WorkspaceFileDiff = {
   status?: "added" | "deleted" | "modified";
 };
 
+export type AgentKind = "opencode" | "zero";
+
+export type AgentConfig = {
+  kind: AgentKind;
+  opencodePort: number;
+  zeroPort: number;
+};
+
+export type ServerStatus = {
+  running: boolean;
+  port: number;
+  pid: number;
+};
+
 export interface ElectronAPI {
   selectDirectory: () => Promise<string | null>;
   readDirectory: (rootPath: string, relPath: string) => Promise<DirEntry[] | null>;
   readWorkspaceDiff: (rootPath: string) => Promise<WorkspaceFileDiff[]>;
-  getServerStatus: () => Promise<{
-    running: boolean;
-    port: number;
-    pid: number;
-  }>;
-  restartServer: () => Promise<{
-    running: boolean;
-    port: number;
-    pid: number;
-  }>;
+  getServerStatus: () => Promise<ServerStatus>;
+  restartServer: () => Promise<ServerStatus>;
+  getAgentConfig: () => Promise<AgentConfig>;
+  setAgentConfig: (
+    config: Partial<AgentConfig>,
+  ) => Promise<{ config: AgentConfig; status: ServerStatus }>;
   onOpenFolder: (callback: (path: string) => void) => () => void;
   isElectron: true;
 }

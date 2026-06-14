@@ -198,7 +198,53 @@ const __dirname = path.dirname(__filename);
 
 // ── Server management ─────────────────────────────────────────────────────
 
-const SERVER_PORT = 13284;
+type AgentKind = "opencode" | "zero";
+
+type AgentConfig = {
+  kind: AgentKind;
+  opencodePort: number;
+  zeroPort: number;
+};
+
+const DEFAULT_AGENT_CONFIG: AgentConfig = {
+  kind: "opencode",
+  opencodePort: 13284,
+  zeroPort: 13286,
+};
+
+let agentConfig: AgentConfig = { ...DEFAULT_AGENT_CONFIG };
+
+function agentConfigPath(): string {
+  return path.join(app.getPath("userData"), "agent-config.json");
+}
+
+function loadAgentConfig(): AgentConfig {
+  try {
+    const raw = fs.readFileSync(agentConfigPath(), "utf-8");
+    const parsed = JSON.parse(raw) as Partial<AgentConfig>;
+    return {
+      kind: parsed.kind === "zero" ? "zero" : "opencode",
+      opencodePort:
+        typeof parsed.opencodePort === "number"
+          ? parsed.opencodePort
+          : DEFAULT_AGENT_CONFIG.opencodePort,
+      zeroPort:
+        typeof parsed.zeroPort === "number" ? parsed.zeroPort : DEFAULT_AGENT_CONFIG.zeroPort,
+    };
+  } catch {
+    return { ...DEFAULT_AGENT_CONFIG };
+  }
+}
+
+function saveAgentConfig(config: AgentConfig): void {
+  try {
+    fs.writeFileSync(agentConfigPath(), JSON.stringify(config, null, 2), "utf-8");
+    agentConfig = config;
+  } catch (err) {
+    console.error("[electron] saveAgentConfig failed:", err);
+  }
+}
+
 let serverProcess: ChildProcess | null = null;
 let serverStatus: { running: boolean; port: number; pid: number } = {
   running: false,
@@ -234,43 +280,47 @@ async function startServer(): Promise<void> {
   if (serverProcess) return;
 
   const isWin = process.platform === "win32";
-  const cmd = isWin ? "opencode.cmd" : "opencode";
-  serverProcess = spawn(cmd, ["serve", "--port", String(SERVER_PORT)], {
+  const kind = agentConfig.kind;
+  const port = kind === "zero" ? agentConfig.zeroPort : agentConfig.opencodePort;
+  const baseCmd = kind === "zero" ? "zero" : "opencode";
+  const cmd = isWin ? `${baseCmd}.cmd` : baseCmd;
+
+  serverProcess = spawn(cmd, ["serve", "--port", String(port)], {
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
     shell: isWin,
   });
 
   serverProcess.stdout?.on("data", (data: Buffer) => {
-    console.log("[opencode]", data.toString().trim());
+    console.log(`[${kind}]`, data.toString().trim());
   });
 
   serverProcess.stderr?.on("data", (data: Buffer) => {
-    console.error("[opencode]", data.toString().trim());
+    console.error(`[${kind}]`, data.toString().trim());
   });
 
   serverProcess.on("error", (err) => {
-    console.error("[electron] Failed to start opencode:", err);
+    console.error(`[electron] Failed to start ${kind}:`, err);
     serverProcess = null;
     serverStatus = { running: false, port: 0, pid: 0 };
   });
 
   serverProcess.on("exit", (code) => {
-    console.log("[electron] opencode exited with code", code);
+    console.log(`[electron] ${kind} exited with code`, code);
     serverProcess = null;
     serverStatus = { running: false, port: 0, pid: 0 };
   });
 
-  const healthy = await healthCheck(SERVER_PORT);
+  const healthy = await healthCheck(port);
   if (healthy) {
     serverStatus = {
       running: true,
-      port: SERVER_PORT,
+      port,
       pid: serverProcess?.pid ?? 0,
     };
-    console.log("[electron] opencode server healthy on port", SERVER_PORT);
+    console.log(`[electron] ${kind} server healthy on port`, port);
   } else {
-    console.warn("[electron] opencode server health check failed");
+    console.warn(`[electron] ${kind} server health check failed`);
   }
 }
 
@@ -336,6 +386,25 @@ function registerIpcHandlers() {
   ipcMain.handle("restartServer", async () => {
     await restartServer();
     return serverStatus;
+  });
+
+  ipcMain.handle("getAgentConfig", async () => {
+    return agentConfig;
+  });
+
+  // Switch active agent: persist config, restart the spawned CLI with the new
+  // kind/port, and return updated server status. The renderer is responsible
+  // for re-connecting its SSE/REST client afterwards.
+  ipcMain.handle("setAgentConfig", async (_e, next: Partial<AgentConfig>) => {
+    const merged: AgentConfig = {
+      kind: next.kind === "zero" ? "zero" : agentConfig.kind,
+      opencodePort:
+        typeof next.opencodePort === "number" ? next.opencodePort : agentConfig.opencodePort,
+      zeroPort: typeof next.zeroPort === "number" ? next.zeroPort : agentConfig.zeroPort,
+    };
+    saveAgentConfig(merged);
+    await restartServer();
+    return { config: agentConfig, status: serverStatus };
   });
 }
 
@@ -445,6 +514,7 @@ function createWindow() {
 // ── App lifecycle ──────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  agentConfig = loadAgentConfig();
   registerIpcHandlers();
   registerMenu();
   await startServer();

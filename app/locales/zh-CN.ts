@@ -22,6 +22,13 @@ export default {
     getStarted: "选择一个项目或创建新会话开始使用",
     newSession: "新建会话",
     openProject: "打开项目",
+    chooseAgent: "选择 Code Agent",
+    agent: {
+      opencode: "OpenCode",
+      zero: "Zero",
+      opencodeDesc: "原生 OpenCode 服务器",
+      zeroDesc: "Zero(opencode 兼容分支)",
+    },
   },
   chat: {
     placeholder: "输入消息...",
@@ -33,7 +40,9 @@ export default {
     title: "设置",
     language: "语言",
     backend: "后端",
+    agent: "Code Agent",
     opencode: "OpenCode 服务器",
+    zero: "Zero 服务器",
     cliBridge: "CLI Bridge",
     workflow: "OpenSpec 工作流",
     enableWorkflow: "启用四步工作流",
@@ -50,6 +59,7 @@ export default {
   topbar: {
     backend: "后端",
     settings: "设置",
+    agentLabel: "Agent",
   },
   render: {
     copyCode: "复制代码",

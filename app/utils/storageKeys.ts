@@ -8,6 +8,8 @@ export const StorageKeys = {
   auth: {
     opencodeBaseUrl: `${PREFIX}opencode:baseUrl`,
     opencodeAuthorization: `${PREFIX}opencode:authorization`,
+    zeroBaseUrl: `${PREFIX}zero:baseUrl`,
+    zeroAuthorization: `${PREFIX}zero:authorization`,
     cliBridgeUrl: `${PREFIX}cli-bridge:url`,
     activeBackend: `${PREFIX}active:backend`,
   },

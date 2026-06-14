@@ -64,3 +64,39 @@ export async function restartServer(): Promise<{
   }
   return null;
 }
+
+/**
+ * Switch the spawned CLI agent in the Electron main process.
+ *
+ * In Browser mode (no electronAPI), this is a no-op — the user is expected to
+ * run `opencode serve` / `zero serve` themselves and configure the URL in
+ * SettingsPanel.
+ */
+export async function restartAgent(kind: "opencode" | "zero"): Promise<{
+  config: import("../types/electron").AgentConfig;
+  status: import("../types/electron").ServerStatus;
+} | null> {
+  if (window.electronAPI) {
+    return window.electronAPI.setAgentConfig({ kind });
+  }
+  return null;
+}
+
+export async function getAgentConfig(): Promise<import("../types/electron").AgentConfig | null> {
+  if (window.electronAPI) {
+    return window.electronAPI.getAgentConfig();
+  }
+  return null;
+}
+
+export async function setAgentConfig(
+  config: Partial<import("../types/electron").AgentConfig>,
+): Promise<{
+  config: import("../types/electron").AgentConfig;
+  status: import("../types/electron").ServerStatus;
+} | null> {
+  if (window.electronAPI) {
+    return window.electronAPI.setAgentConfig(config);
+  }
+  return null;
+}

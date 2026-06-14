@@ -22,6 +22,13 @@ export default {
     getStarted: "Get started by selecting a project or creating a new session",
     newSession: "New Session",
     openProject: "Open Project",
+    chooseAgent: "Choose Code Agent",
+    agent: {
+      opencode: "OpenCode",
+      zero: "Zero",
+      opencodeDesc: "Native OpenCode server",
+      zeroDesc: "Zero (opencode-compatible fork)",
+    },
   },
   chat: {
     placeholder: "Type a message...",
@@ -33,7 +40,9 @@ export default {
     title: "Settings",
     language: "Language",
     backend: "Backend",
+    agent: "Code Agent",
     opencode: "OpenCode Server",
+    zero: "Zero Server",
     cliBridge: "CLI Bridge",
     workflow: "OpenSpec Workflow",
     enableWorkflow: "Enable 4-step workflow",
@@ -50,6 +59,7 @@ export default {
   topbar: {
     backend: "Backend",
     settings: "Settings",
+    agentLabel: "Agent",
   },
   render: {
     copyCode: "Copy code",

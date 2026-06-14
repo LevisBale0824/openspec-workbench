@@ -3,13 +3,32 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useProject } from "../composables/useProject";
+import { useBackend } from "../composables/useBackend";
+import type { BackendKind } from "../backends/types";
 
 const { t } = useI18n();
 const router = useRouter();
 const project = useProject();
+const backend = useBackend();
 
 const showProjectDialog = ref(false);
 const manualPath = ref("");
+const switching = ref(false);
+
+const agentOptions: Array<{ kind: BackendKind; labelKey: string; descKey: string }> = [
+  { kind: "opencode", labelKey: "welcome.agent.opencode", descKey: "welcome.agent.opencodeDesc" },
+  { kind: "zero", labelKey: "welcome.agent.zero", descKey: "welcome.agent.zeroDesc" },
+];
+
+async function chooseAgent(kind: BackendKind) {
+  if (kind === backend.activeBackendKind.value || switching.value) return;
+  switching.value = true;
+  try {
+    await backend.switchBackend(kind);
+  } finally {
+    switching.value = false;
+  }
+}
 
 function newSession() {
   router.push({ name: "chat" });
@@ -69,6 +88,29 @@ function submitManualPath() {
       <p class="text-xs text-surface-600 mb-6">
         {{ t("welcome.getStarted") }}
       </p>
+
+      <!-- Agent selector -->
+      <div class="mb-6">
+        <p class="text-xs text-surface-500 mb-2">{{ t("welcome.chooseAgent") }}</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            v-for="opt in agentOptions"
+            :key="opt.kind"
+            type="button"
+            :disabled="switching"
+            :class="[
+              'px-3 py-2 rounded-lg border text-left transition-colors disabled:opacity-50',
+              backend.activeBackendKind.value === opt.kind
+                ? 'border-accent-cyan/60 bg-accent-cyan/10'
+                : 'border-surface-700 bg-surface-800/50 hover:border-surface-600',
+            ]"
+            @click="chooseAgent(opt.kind)"
+          >
+            <div class="text-sm font-medium text-surface-100">{{ t(opt.labelKey) }}</div>
+            <div class="text-[10px] text-surface-500 mt-0.5">{{ t(opt.descKey) }}</div>
+          </button>
+        </div>
+      </div>
 
       <!-- Actions -->
       <div class="flex gap-3 justify-center">

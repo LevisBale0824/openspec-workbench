@@ -3,18 +3,31 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useProject } from "../composables/useProject";
+import { useBackend } from "../composables/useBackend";
 import { isElectron, selectDirectory } from "../utils/electronBridge";
 
 const { t } = useI18n();
 const router = useRouter();
 const project = useProject();
+const backend = useBackend();
 const projectState = computed(() => project.state);
 
-defineEmits<{
+const emit = defineEmits<{
   "toggle-settings": [];
 }>();
 
 const projectName = computed(() => projectState.value.directoryName || "");
+
+const agentLabel = computed(() => {
+  switch (backend.activeBackendKind.value) {
+    case "zero":
+      return t("welcome.agent.zero");
+    case "cli-bridge":
+      return "CLI Bridge";
+    default:
+      return t("welcome.agent.opencode");
+  }
+});
 
 async function openFolder() {
   // Browser: go to the Welcome page which has the directory picker UI.
@@ -68,8 +81,16 @@ async function openFolder() {
     <!-- Right: Actions -->
     <div class="flex items-center gap-1 flex-shrink-0">
       <button
+        class="px-2 py-1 text-xs text-surface-300 hover:text-accent-cyan hover:bg-surface-800 rounded transition-colors flex items-center gap-1"
+        :title="t('topbar.agentLabel')"
+        @click="emit('toggle-settings')"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-accent-emerald" />
+        <span>{{ agentLabel }}</span>
+      </button>
+      <button
         class="px-2 py-1 text-xs text-surface-400 hover:text-surface-200 hover:bg-surface-800 rounded transition-colors"
-        @click="$emit('toggle-settings')"
+        @click="emit('toggle-settings')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

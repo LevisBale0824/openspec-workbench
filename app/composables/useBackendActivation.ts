@@ -104,6 +104,38 @@ export function useBackendActivation(params: {
     }
   }
 
+  // Zero server exposes the same REST/SSE API as opencode, so the activation
+  // flow is identical (including providers/agents bootstrap).
+  async function activateZero() {
+    params.activeBackendKind.value = "zero";
+    setActiveBackendKind("zero");
+
+    connectionState.value = "connecting";
+    initMessage.value = params.t("status.connecting");
+    errorMessage.value = "";
+
+    try {
+      await params.ge.connect({ failFast: true, timeoutMs: 10000 });
+
+      connectionState.value = "bootstrapping";
+      initMessage.value = params.t("status.loadingProjects");
+
+      await params.fetchHomePath();
+      await params.bootstrapSelections();
+      await Promise.all([params.fetchProviders(), params.fetchAgents()]);
+
+      connectionState.value = "ready";
+      initMessage.value = "";
+    } catch (error) {
+      params.ge.disconnect();
+      const message = params.toErrorMessage(error);
+      connectionState.value = "error";
+      errorMessage.value = message;
+    } finally {
+      initializationInFlight.value = false;
+    }
+  }
+
   async function startInitialization() {
     if (initializationInFlight.value) return;
     initializationInFlight.value = true;
@@ -111,6 +143,8 @@ export function useBackendActivation(params: {
     const kind = params.activeBackendKind.value;
     if (kind === "opencode") {
       await activateOpenCode();
+    } else if (kind === "zero") {
+      await activateZero();
     } else {
       await activateCliBridge();
     }

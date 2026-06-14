@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useBackend } from "../composables/useBackend";
 import { StorageKeys, storageSet } from "../utils/storageKeys";
+import type { BackendKind } from "../backends/types";
 
 const { t, locale } = useI18n();
 const backend = useBackend();
@@ -30,10 +31,43 @@ function changeLocale(lang: string) {
   storageSet(StorageKeys.ui.locale, lang);
 }
 
+// ── Agent selection ───────────────────────────────────────────────────
+
+const agentOptions: Array<{ kind: BackendKind; labelKey: string }> = [
+  { kind: "opencode", labelKey: "settings.opencode" },
+  { kind: "zero", labelKey: "settings.zero" },
+];
+
+const switching = ref(false);
+
+async function selectAgent(kind: BackendKind) {
+  if (kind === backend.activeBackendKind.value || switching.value) return;
+  switching.value = true;
+  try {
+    backend.disconnect();
+    await backend.switchBackend(kind);
+    urlInput.value = backend.baseUrl.value;
+    authInput.value = backend.authHeader.value ?? "";
+  } finally {
+    switching.value = false;
+  }
+}
+
 // ── Backend URL ───────────────────────────────────────────────────────
 
 const urlInput = ref(backend.baseUrl.value);
 const authInput = ref(backend.authHeader.value ?? "");
+
+const urlPlaceholder = computed(() => {
+  switch (backend.activeBackendKind.value) {
+    case "zero":
+      return "http://localhost:13286";
+    case "cli-bridge":
+      return "http://localhost:13285";
+    default:
+      return "http://localhost:13284";
+  }
+});
 
 watch(
   () => backend.baseUrl.value,
@@ -133,14 +167,41 @@ function close() {
           </p>
         </div>
 
-        <!-- OpenCode Server URL -->
+        <!-- Code Agent selector -->
+        <div class="mb-5">
+          <label class="block text-sm text-surface-400 mb-2">{{ t("settings.agent") }}</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="opt in agentOptions"
+              :key="opt.kind"
+              type="button"
+              :disabled="switching"
+              :class="[
+                'px-3 py-2 text-sm rounded-lg border transition-colors disabled:opacity-50',
+                backend.activeBackendKind.value === opt.kind
+                  ? 'border-accent-cyan/60 bg-accent-cyan/15 text-accent-cyan'
+                  : 'border-surface-700 bg-surface-800 text-surface-300 hover:border-surface-600',
+              ]"
+              @click="selectAgent(opt.kind)"
+            >
+              {{ t(opt.labelKey) }}
+            </button>
+          </div>
+          <p v-if="switching" class="text-[10px] text-surface-500 mt-1.5">
+            {{ t("status.connecting") }}
+          </p>
+        </div>
+
+        <!-- Server URL -->
         <div class="mb-4">
-          <label class="block text-sm text-surface-400 mb-2">{{ t("settings.opencode") }}</label>
+          <label class="block text-sm text-surface-400 mb-2">{{
+            backend.activeBackendKind.value === "zero" ? t("settings.zero") : t("settings.opencode")
+          }}</label>
           <div class="flex gap-2">
             <input
               v-model="urlInput"
               type="text"
-              placeholder="http://localhost:13284"
+              :placeholder="urlPlaceholder"
               class="flex-1 px-3 py-2 text-sm rounded-lg bg-surface-800 border border-surface-700 text-surface-100 placeholder:text-surface-600 focus:outline-none focus:border-accent-cyan/50 transition-colors"
               @keydown.enter="applyUrl"
             />
