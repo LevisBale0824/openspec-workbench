@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, watch, onMounted, onUnmounted } from "vue";
 import TopBar from "./components/TopBar.vue";
 import SidePanel from "./components/SidePanel.vue";
 import StatusBar from "./components/StatusBar.vue";
@@ -39,6 +39,19 @@ function updateExtent() {
 // a floating window so the user can read it alongside the chat.
 const activeDiff = ref<MessageDiffEntry | null>(null);
 
+// Auto-close the diff viewer when the opened file is no longer in the
+// workspace diffs (e.g. user deleted or reverted it externally). Only
+// triggers when workspaceDiffs is non-empty so session-originated diffs
+// (opened when there are no workspace changes) are left alone.
+watch(
+  () => backend.workspaceDiffs.value,
+  (diffs) => {
+    if (!activeDiff.value || diffs.length === 0) return;
+    const stillExists = diffs.some((d) => d.file === activeDiff.value!.file);
+    if (!stillExists) activeDiff.value = null;
+  },
+);
+
 const project = useProject();
 const openspec = useOpenSpec();
 let unsubOpenFolder: (() => void) | null = null;
@@ -49,6 +62,7 @@ let unsubOpenFolder: (() => void) | null = null;
 function onFocusRefresh(): void {
   project.scheduleRefreshTree();
   openspec.scheduleRefresh();
+  backend.scheduleWorkspaceDiffRefresh(400);
 }
 
 function onVisibilityChange(): void {

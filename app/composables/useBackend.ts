@@ -586,6 +586,7 @@ export function useBackend() {
     setActiveDirectory,
     switchBackend,
     restartCurrentAgent,
+    scheduleWorkspaceDiffRefresh,
 
     // Session
     createSession: sessionLifecycle.createSession,

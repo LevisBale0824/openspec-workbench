@@ -171,7 +171,7 @@ async function readWorkspaceDiffs(rootPath: string): Promise<WorkspaceFileDiff[]
       item.status === "added"
         ? ""
         : (
-            await runGit(rootPath, ["-c", "core.quotepath=false", "diff", "--", item.path])
+            await runGit(rootPath, ["-c", "core.quotepath=false", "diff", "HEAD", "--", item.path])
           ).stdout.toString("utf8");
     const stats =
       item.status === "added" && after
